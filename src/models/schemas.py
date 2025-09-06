@@ -1,49 +1,21 @@
-#!/usr/bin/env python3
-"""
-Pydantic Models for Data Validation
-Following official documentation from:
-- Crawl4AI: https://docs.crawl4ai.com/core/quickstart/#llm-extraction
-- Inject_OpenAI_Analysis_duringCrawl.prompt.md specifications
-"""
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-
 
 class PageSummary(BaseModel):
+    """Schema for LLM extraction following official Crawl4AI pattern.
+    Source: https://docs.crawl4ai.com/extraction/llm-strategies/
+    Note: url is metadata from crawler, not extracted content
     """
-    Schema for LLM-powered content analysis - Official Crawl4AI pattern
-    Source: Inject_OpenAI_Analysis_duringCrawl.prompt.md
-    """
-    title: str = Field(..., description="Page title")
-    summary: str = Field(..., description="Brief summary of the page content")
-
+    title: str = Field(description="The main title of the web page")
+    summary: str = Field(description="A short paragraph summary of the page content")
 
 class CrawlResult(BaseModel):
-    """
-    Standardized crawl result structure for consistent data handling
-    Based on the working patterns from asyncwebcrawler_advanced.py
-    """
-    url: str = Field(..., description="The URL that was crawled")
-    success: bool = Field(..., description="Whether the crawl was successful")
-    raw_markdown: Optional[str] = Field(None, description="Raw markdown content")
-    analysis: Optional[Dict[str, Any]] = Field(None, description="LLM analysis results")
-    error_message: Optional[str] = Field(None, description="Error message if crawl failed")
-    crawl_time: str = Field(default_factory=lambda: datetime.now().isoformat(), description="Timestamp of crawl")
-    status_code: Optional[int] = Field(None, description="HTTP status code")
+    page: PageSummary
+    extracted_content: str
 
+class Crawl4AIResponse(BaseModel):
+    results: list[CrawlResult]
 
-class SupabaseRecord(BaseModel):
-    """
-    Model for Supabase database records
-    Matches the pages table schema: id, url, content, created_at
-    """
-    url: str = Field(..., description="The crawled URL")
-    content: str = Field(..., description="Page content including analysis")
-    
-    def to_supabase_dict(self) -> dict:
-        """Convert to dictionary suitable for Supabase insertion"""
-        return {
-            "url": self.url,
-            "content": self.content
-        }
+# Example usage:
+# response = Crawl4AIResponse(results=[
+#     CrawlResult(page=PageSummary(title="Example Title", summary="This is a short summary.", url="https://example.com"), extracted_content="Full content of the page")
+# ])

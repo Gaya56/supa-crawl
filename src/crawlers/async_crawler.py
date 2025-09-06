@@ -158,16 +158,23 @@ class AdvancedWebCrawler:
             return await self.crawl_with_memory_adaptive_dispatcher(urls)
         
         # Configure LLM extraction strategy - Following official pattern
-        # Source: Inject_OpenAI_Analysis_duringCrawl.prompt.md
+        # Source: https://docs.crawl4ai.com/extraction/llm-strategies/
         llm_strategy = LLMExtractionStrategy(
             llm_config=LLMConfig(
-                provider="openai/gpt-4o",
+                provider="openai/gpt-4o-mini",  # Official docs pattern
                 api_token=env_config.openai_api_key
             ),
-            schema=PageSummary.model_json_schema(),   # target schema for output
+            schema=PageSummary.model_json_schema(),   # Official schema method
             extraction_type="schema",
-            instruction="Provide a brief summary of the page content and its title.",  # prompt instruction for the LLM
-            extra_args={"temperature": 0}  # optional: make output deterministic
+            instruction="""Extract the main title and create a concise summary from this web page content. 
+            For the title: Use the main page heading, document title, or prominent header text.
+            For the summary: Write a 1-2 sentence description of what this page is about and its main purpose.
+            If you cannot find a clear title, extract the most prominent heading or use the page's main topic.
+            If you cannot determine the page content, describe what you can see.""",
+            chunk_token_threshold=1000,
+            apply_chunking=True,
+            input_format="markdown",
+            extra_args={"temperature": 0}  # Make output deterministic
         )
         
         # Update run config with LLM strategy - Following official pattern
@@ -214,19 +221,67 @@ class AdvancedWebCrawler:
     
     async def crawl_and_store_in_supabase(self, urls: List[str]) -> bool:
         """
-        Crawl URLs and store results in Supabase database.
+        Crawl URLs and store results in Supabase database with LLM analysis.
         Ensures .env file contains SUPABASE_URL and SUPABASE_KEY
         """
         if not self.storage_handler.is_available:
             print("❌ Supabase not configured. Check environment variables.")
             return False
         
-        print(f"💾 Starting crawl and store workflow for {len(urls)} URLs")
+        print(f"💾 Starting crawl and store workflow with LLM analysis for {len(urls)} URLs")
         
         # Crawl with LLM analysis
         results = await self.crawl_with_llm_analysis(urls)
         
-        # Store results in Supabase
-        stored_count = self.storage_handler.store_crawl_results(results)
+        if not results:
+            print("❌ No results from LLM analysis")
+            return False
         
+        # Store results using the new schema with separate title/summary columns
+        stored_count = 0
+        for result in results:
+            try:
+                url = result.get('url')
+                if not url:
+                    print("⚠ Skipping result with no URL")
+                    continue
+                    
+                raw_markdown = result.get('raw_markdown', '')
+                analysis_list = result.get('analysis', [])
+                
+                if analysis_list:
+                    # Handle both list and direct dict formats
+                    if isinstance(analysis_list, list) and len(analysis_list) > 0:
+                        analysis = analysis_list[0]
+                    else:
+                        analysis = analysis_list
+                    
+                    # Ensure analysis is a dict
+                    if isinstance(analysis, dict):
+                        title = analysis.get('title', 'No title extracted')
+                        summary = analysis.get('summary', 'No summary extracted')
+                    else:
+                        title = 'No title extracted'
+                        summary = 'No summary extracted'
+                    
+                    # Store using new schema
+                    response = self.storage_handler.store_page_summary(
+                        url=url,
+                        title=title,
+                        summary=summary,
+                        raw_markdown=raw_markdown
+                    )
+                    
+                    if response:
+                        stored_count += 1
+                        print(f"✓ Stored with LLM analysis: {url}")
+                    else:
+                        print(f"❌ Failed to store: {url}")
+                else:
+                    print(f"⚠ No LLM analysis for: {url}")
+                    
+            except Exception as e:
+                print(f"❌ Error storing {result.get('url', 'unknown')}: {str(e)}")
+        
+        print(f"🎯 Storage complete: {stored_count}/{len(results)} results stored with LLM analysis")
         return stored_count > 0

@@ -8,7 +8,6 @@ import sys
 from typing import Optional, List, Dict, Any
 from supabase import create_client, Client
 from ..config.environment import env_config
-from ..models.schemas import CrawlResult, SupabaseRecord
 
 # Import check for Supabase client
 try:
@@ -49,6 +48,31 @@ class SupabaseHandler:
         """Check if Supabase client is available"""
         return self.client is not None
     
+    def _extract_first_paragraph(self, markdown_content: str) -> str:
+        """
+        Extract the first meaningful paragraph from markdown content.
+        Limits to ~500 characters for database storage efficiency.
+        """
+        if not markdown_content:
+            return ""
+        
+        # Split by double newlines (paragraph breaks)
+        paragraphs = markdown_content.split('\n\n')
+        
+        # Find first substantial paragraph (more than 50 characters)
+        for paragraph in paragraphs:
+            # Clean up the paragraph
+            clean_paragraph = paragraph.strip().replace('\n', ' ')
+            # Remove markdown headers and formatting
+            clean_paragraph = clean_paragraph.lstrip('#').strip()
+            
+            if len(clean_paragraph) > 50:  # Meaningful content
+                # Limit to ~500 characters for storage
+                return clean_paragraph[:500] + "..." if len(clean_paragraph) > 500 else clean_paragraph
+        
+        # Fallback: return first 500 characters of entire content
+        return markdown_content[:500] + "..." if len(markdown_content) > 500 else markdown_content
+    
     def store_crawl_results(self, results: List[Dict[str, Any]]) -> int:
         """
         Store crawl results in Supabase pages table
@@ -79,9 +103,11 @@ class SupabaseHandler:
                     continue
                 
                 # Prepare data for storage - only use fields that exist in pages table
+                # Extract first paragraph from markdown for concise storage
+                first_paragraph = self._extract_first_paragraph(raw_markdown)
                 data = {
                     'url': url,
-                    'content': raw_markdown[:10000]  # Limit content size
+                    'content': first_paragraph  # Store only first paragraph
                 }
                 
                 # If we have LLM analysis, add title as a comment in content
@@ -108,6 +134,54 @@ class SupabaseHandler:
         
         print(f"🎯 Storage complete: {stored_count}/{len(results)} results stored")
         return stored_count
+    
+    def store_page_summary(self, url: str, title: str, summary: str, raw_markdown: str = None, content_hash: str = None):
+        """
+        Store page summary using official Supabase upsert pattern.
+        Source: https://supabase.com/docs/reference/python/upsert
+        
+        Args:
+            url: Page URL (used as unique identifier)
+            title: Extracted page title
+            summary: Extracted page summary
+            raw_markdown: Optional raw markdown content
+            content_hash: Optional content hash for deduplication
+            
+        Returns:
+            Supabase response data or None if failed
+        """
+        if not self.is_available:
+            print("❌ Supabase client not available")
+            return None
+        
+        try:
+            # Prepare data for upsert - following official pattern
+            # Now we can store title and summary in their own columns
+            data = {
+                "url": url,
+                "title": title,
+                "summary": summary
+            }
+            
+            # Add content as first paragraph if provided
+            if raw_markdown:
+                first_paragraph = self._extract_first_paragraph(raw_markdown)
+                data["content"] = first_paragraph
+            
+            # Official Supabase upsert pattern
+            # Source: https://supabase.com/docs/reference/python/upsert
+            response = self.client.table("pages").upsert(data).execute()
+            
+            if response.data:
+                print(f"✓ Stored page summary: {url}")
+                return response.data
+            else:
+                print(f"⚠ No data returned for: {url}")
+                return None
+                
+        except Exception as e:
+            print(f"✗ Failed to store page summary for {url}: {str(e)}")
+            return None
     
     def check_connection(self) -> bool:
         """
