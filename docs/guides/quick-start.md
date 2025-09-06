@@ -1,275 +1,379 @@
-# 🚀 Quick Start Guide
+# Quick Start Guide
 
-## Getting Started with AsyncWebCrawler
-
-This guide will help you get up and running with the AsyncWebCrawler Advanced Implementation in under 10 minutes.
+Get up and running with Supa-Crawl in under 10 minutes. This guide walks you through the complete setup process from installation to your first successful crawl with LLM analysis.
 
 ## Prerequisites
 
-- Python 3.8+
-- Active internet connection
-- Supabase account (for storage features)
-- OpenAI API key (for LLM analysis)
+Before starting, ensure you have:
 
-## Installation
+- **Python 3.12+** installed
+- **Git** for repository management
+- **OpenAI API key** ([Get one here](https://platform.openai.com/api-keys))
+- **Supabase account** ([Sign up here](https://supabase.com))
 
-### 1. Clone the Repository
+## Step 1: Repository Setup
+
+### Clone and Install
+
 ```bash
-git clone <repository-url>
-cd asyncwebcrawler-advanced
-```
+# Clone the repository
+git clone https://github.com/Gaya56/supa-crawl.git
+cd supa-crawl
 
-### 2. Install Dependencies
-```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+# On Linux/macOS:
+source .venv/bin/activate
+# On Windows:
+# .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Install browser dependencies for Playwright
+playwright install
+sudo playwright install-deps  # Linux/macOS only
 ```
 
-### 3. Environment Setup
-Create a `.env` file in the root directory:
+### Verify Installation
+
+```bash
+# Test basic imports
+python -c "
+import crawl4ai
+import openai
+import supabase
+print('✅ All dependencies installed successfully!')
+"
+```
+
+## Step 2: Environment Configuration
+
+### Create Environment File
+
+```bash
+# Copy example environment file
+cp .env.example .env
+
+# Edit the .env file with your credentials
+nano .env  # or use your preferred editor
+```
+
+### Configure API Keys
+
+Add your credentials to `.env`:
 
 ```env
-# Required: Supabase Configuration
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_KEY=your_supabase_anon_key
+# OpenAI Configuration
+OPENAI_API_KEY=sk-your-openai-api-key-here
 
-# Optional: OpenAI Configuration (for LLM analysis)
-OPENAI_API_KEY=your_openai_api_key
+# Supabase Configuration
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_KEY=your-anon-key-here
+
+# Optional: Advanced settings
+CRAWL4AI_VERBOSE=false
+CRAWL4AI_CACHE_MODE=bypass
 ```
 
-### 4. Database Setup
-Make sure your Supabase project has a `pages` table with this structure:
+### Get Your Supabase Credentials
+
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Create a new project or select existing one
+3. Go to **Settings** → **API**
+4. Copy your **Project URL** and **anon/public key**
+
+## Step 3: Database Setup
+
+### Create the Pages Table
+
+In your Supabase SQL Editor, run:
 
 ```sql
+-- Create the main pages table
 CREATE TABLE pages (
-    id SERIAL PRIMARY KEY,
-    url TEXT UNIQUE NOT NULL,
-    content TEXT,
-    analysis_header TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    url TEXT NOT NULL,
+    title TEXT,           -- AI-generated title
+    summary TEXT,         -- AI-generated summary
+    content TEXT          -- Raw markdown content
 );
+
+-- Create performance indexes
+CREATE INDEX idx_pages_url ON pages(url);
+CREATE INDEX idx_pages_title ON pages(title);
+
+-- Optional: Add Row Level Security (RLS)
+ALTER TABLE pages ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for authenticated users
+CREATE POLICY "Users can insert pages" ON pages
+FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can select pages" ON pages
+FOR SELECT USING (true);
 ```
 
-## Your First Crawl
+### Verify Database Connection
 
-### Basic Crawling Example
+```bash
+# Test database connectivity
+python -c "
+from src.storage.supabase_handler import SupabaseHandler
+handler = SupabaseHandler()
+if handler.is_available:
+    print('✅ Database connection successful!')
+else:
+    print('❌ Database connection failed. Check your credentials.')
+"
+```
+
+## Step 4: First Crawl Test
+
+### Basic Crawling Test
+
+Create a test file `test_crawl.py`:
+
 ```python
 import asyncio
 from src.crawlers.async_crawler import AdvancedWebCrawler
 
-async def first_crawl():
-    # Initialize crawler
+async def test_basic_crawl():
+    """Test basic crawling functionality"""
+    print("🧪 Testing basic crawling...")
+    
     crawler = AdvancedWebCrawler()
+    urls = ["https://example.com"]
     
-    # Crawl some URLs
-    urls = [
-        "https://docs.crawl4ai.com/",
-        "https://example.com"
-    ]
-    
-    # Use memory adaptive dispatcher
+    # Test simple crawling
     results = await crawler.crawl_with_memory_adaptive_dispatcher(urls)
     
-    # Display results
-    for result in results:
-        print(f"✅ URL: {result.url}")
-        print(f"📄 Content Length: {len(result.content)} chars")
-        print(f"🕐 Timestamp: {result.timestamp}")
-        print("-" * 50)
+    if results:
+        print(f"✅ Basic crawl successful! Retrieved {len(results)} pages")
+        print(f"📄 Content preview: {results[0]['raw_markdown'][:100]}...")
+    else:
+        print("❌ Basic crawl failed")
 
-# Run the crawler
-asyncio.run(first_crawl())
+# Run the test
+asyncio.run(test_basic_crawl())
 ```
 
-**Expected Output:**
-```
-✅ URL: https://docs.crawl4ai.com/
-📄 Content Length: 2547 chars
-🕐 Timestamp: 2024-01-20 10:30:45.123456
---------------------------------------------------
-✅ URL: https://example.com
-📄 Content Length: 1256 chars
-🕐 Timestamp: 2024-01-20 10:30:46.234567
---------------------------------------------------
+```bash
+# Run the test
+python test_crawl.py
 ```
 
-## Common Use Cases
+### LLM Analysis Test
 
-### 1. Simple Content Extraction
-Perfect for gathering content from multiple pages quickly.
+Create `test_llm.py`:
 
 ```python
-async def extract_content():
+import asyncio
+from src.crawlers.async_crawler import AdvancedWebCrawler
+
+async def test_llm_analysis():
+    """Test LLM-powered content analysis"""
+    print("🧠 Testing LLM analysis...")
+    
     crawler = AdvancedWebCrawler()
+    urls = ["https://example.com"]
     
-    urls = [
-        "https://news.ycombinator.com/",
-        "https://github.com/trending",
-        "https://stackoverflow.com/questions"
-    ]
-    
-    results = await crawler.crawl_with_semaphore_dispatcher(urls)
-    
-    for result in results:
-        if result.success:
-            print(f"Extracted {len(result.content)} chars from {result.url}")
-        else:
-            print(f"Failed to crawl {result.url}")
-
-asyncio.run(extract_content())
-```
-
-### 2. AI-Powered Analysis
-Extract structured information using OpenAI GPT-4o.
-
-```python
-async def ai_analysis():
-    crawler = AdvancedWebCrawler()
-    
-    # Analyze documentation pages
-    urls = [
-        "https://docs.crawl4ai.com/introduction/",
-        "https://docs.crawl4ai.com/api/parameters/"
-    ]
-    
+    # Test LLM extraction
     results = await crawler.crawl_with_llm_analysis(urls)
     
-    for result in results:
-        if result.analysis:
-            print(f"📖 Title: {result.analysis['title']}")
-            print(f"📝 Summary: {result.analysis['summary']}")
-            print("-" * 50)
+    if results and results[0].get('analysis'):
+        analysis = results[0]['analysis'][0]
+        print("✅ LLM analysis successful!")
+        print(f"📝 Title: {analysis['title']}")
+        print(f"📄 Summary: {analysis['summary']}")
+    else:
+        print("❌ LLM analysis failed")
 
-asyncio.run(ai_analysis())
+# Run the test
+asyncio.run(test_llm_analysis())
 ```
 
-### 3. Complete Pipeline with Storage
-Crawl, analyze, and store everything in Supabase.
+```bash
+# Run the test
+python test_llm.py
+```
+
+## Step 5: Complete Pipeline Test
+
+### Full Integration Test
 
 ```python
-async def full_pipeline():
-    crawler = AdvancedWebCrawler()
+import asyncio
+from src.crawlers.async_crawler import AdvancedWebCrawler
+
+async def test_full_pipeline():
+    """Test complete crawl → analyze → store pipeline"""
+    print("🚀 Testing complete pipeline...")
     
+    crawler = AdvancedWebCrawler()
     urls = [
-        "https://docs.crawl4ai.com/",
-        "https://docs.crawl4ai.com/api/parameters/",
-        "https://docs.crawl4ai.com/examples/"
+        "https://example.com",
+        "https://docs.crawl4ai.com/"
     ]
     
+    # Run complete pipeline
     success = await crawler.crawl_and_store_in_supabase(urls)
     
     if success:
-        print("✅ All URLs processed and stored successfully!")
-        print("🔗 Check your Supabase dashboard for the results")
+        print("✅ Complete pipeline successful!")
+        print("📊 Check your Supabase dashboard to see the stored data")
     else:
-        print("❌ Some operations failed - check logs for details")
+        print("❌ Pipeline failed - check logs for details")
 
-asyncio.run(full_pipeline())
+# Run the test
+asyncio.run(test_full_pipeline())
 ```
 
-## Testing Your Setup
+### Verify Stored Data
 
-Run the built-in test suite to verify everything is working:
+Check your Supabase dashboard or run:
+
+```python
+from src.storage.supabase_handler import SupabaseHandler
+
+handler = SupabaseHandler()
+response = handler.client.table('pages').select('url, title, summary').limit(5).execute()
+
+print("📊 Recent crawl results:")
+for row in response.data:
+    print(f"🔗 {row['url']}")
+    print(f"   📝 {row['title']}")
+    print(f"   📄 {row['summary'][:100]}...")
+    print()
+```
+
+## Step 6: Run the Main Demo
+
+### Execute Complete Demo
 
 ```bash
+# Run the comprehensive demo
 python main.py
 ```
 
-**Expected Output:**
+Expected output:
 ```
-🔧 AsyncWebCrawler Advanced Implementation Test
+🌐 AsyncWebCrawler Advanced Implementation
+============================================================
+Following official documentation:
+- Crawl4AI: https://docs.crawl4ai.com/
+- Supabase: https://supabase.com/docs
+============================================================
 
-📊 Test Results:
-Memory Adaptive: 2/2 ✅
-Semaphore: 2/2 ✅
-LLM Analysis: 2/2 ✅
-Supabase Storage: 2/2 ✅
+🎯 Target URLs (3):
+  1. https://docs.crawl4ai.com/api/parameters/
+  2. https://docs.crawl4ai.com/
+  3. https://example.com
 
-✅ AsyncWebCrawler implementation completed successfully!
-All tests passed with 100% success rate.
-```
+1️⃣ Testing Memory Adaptive Dispatcher...
+   Results: 2 successful crawls
 
-## Configuration Options
+2️⃣ Testing Semaphore Dispatcher...
+   Results: 2 successful crawls
 
-### Browser Settings
-Modify browser behavior in `src/config/environment.py`:
+3️⃣ Testing LLM Analysis...
+   Results: 2 analyzed crawls
 
-```python
-# For debugging, you can disable headless mode
-BrowserConfig(
-    enable_stealth=True,
-    headless=False,  # Shows browser window
-    browser_type="chromium"
-)
-```
+4️⃣ Testing Full Pipeline with Supabase...
+   Storage success: True
 
-### Crawler Settings
-Adjust crawling parameters:
-
-```python
-# For faster crawling (less polite)
-CrawlerRunConfig(
-    mean_delay=0.05,     # Reduced delay
-    max_range=0.1,       # Less variation
-    semaphore_count=10   # More concurrent operations
-)
+🎉 All tests completed successfully!
 ```
 
-### LLM Analysis
-Customize AI analysis instructions:
+## Common Issues & Solutions
 
-```python
-llm_strategy = LLMExtractionStrategy(
-    instruction="Extract the main topic, key points, and any technical specifications from this page."
-)
+### Issue 1: Import Errors
+
+```bash
+# Error: ModuleNotFoundError
+# Solution: Ensure virtual environment is activated
+source .venv/bin/activate  # Linux/macOS
+pip install -r requirements.txt
 ```
 
-## Troubleshooting
+### Issue 2: Browser Dependencies
 
-### Common Issues
+```bash
+# Error: Browser executable not found
+# Solution: Install Playwright browsers
+playwright install
+sudo playwright install-deps  # Linux/macOS
+```
 
-#### 1. Environment Variables Not Found
-```
-Error: Supabase URL not configured
-```
-**Solution:** Check your `.env` file and ensure all required variables are set.
+### Issue 3: OpenAI API Errors
 
-#### 2. Network Connectivity Issues
+```bash
+# Error: Invalid API key
+# Solution: Verify your OpenAI API key
+python -c "
+import openai
+import os
+client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+print('✅ OpenAI API key valid')
+"
 ```
-Error: Failed to connect to target website
-```
-**Solution:** Check your internet connection and try with different URLs.
 
-#### 3. Supabase Connection Failed
-```
-Error: Could not authenticate with Supabase
-```
-**Solution:** Verify your Supabase URL and API key are correct.
+### Issue 4: Supabase Connection
 
-#### 4. OpenAI API Issues
-```
-Error: OpenAI API key invalid
-```
-**Solution:** Check your OpenAI API key and account balance.
-
-### Debug Mode
-Enable detailed logging by setting:
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
+```bash
+# Error: Failed to connect to Supabase
+# Solution: Check URL and key format
+# URL should be: https://project-id.supabase.co
+# Key should be: eyJ... (starts with eyJ)
 ```
 
 ## Next Steps
 
-- **Explore Advanced Features**: Check out the [Advanced Usage Guide](advanced-usage.md)
-- **API Reference**: Read the [complete API documentation](../api/reference.md)
-- **Architecture**: Understand the [system architecture](../architecture/overview.md)
-- **Performance**: Learn about [optimization strategies](performance-tuning.md)
+Now that you have Supa-Crawl running:
 
-## Need Help?
+1. **Explore Advanced Features**: Check out [Advanced Usage Guide](advanced-usage.md)
+2. **Customize Extraction**: Modify the LLM prompts in `src/models/schemas.py`
+3. **Scale Your Operations**: Learn about batch processing and optimization
+4. **Monitor Performance**: Set up logging and monitoring
+5. **Build Applications**: Use the API to build custom crawling solutions
 
-- Check the [Troubleshooting Guide](troubleshooting.md)
-- Review the [FAQ](faq.md)
-- Look at example implementations in the repository
+## Quick Reference
 
-You're now ready to start crawling! 🕷️✨
+### Essential Commands
+
+```bash
+# Start crawling
+python main.py
+
+# Run tests
+python -m pytest tests/ -v
+
+# Check system status
+python -c "from src.config.environment import env_config; env_config.validate()"
+
+# View recent results
+python -c "
+from src.storage.supabase_handler import SupabaseHandler
+h = SupabaseHandler()
+data = h.client.table('pages').select('*').limit(3).execute()
+print(data.data)
+"
+```
+
+### Key Files
+
+- `main.py` - Complete demo and testing
+- `src/crawlers/async_crawler.py` - Core crawling logic
+- `src/models/schemas.py` - Data models and LLM schemas
+- `src/storage/supabase_handler.py` - Database operations
+- `.env` - Environment configuration
+
+### Documentation
+
+- [API Reference](../api/reference.md) - Complete method documentation
+- [Architecture Overview](../architecture/overview.md) - System design
+- [Troubleshooting](troubleshooting.md) - Common issues and solutions
+
+**🎉 Congratulations! You now have a fully functional AI-powered web crawling pipeline.**

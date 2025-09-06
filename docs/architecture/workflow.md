@@ -1,331 +1,437 @@
-# 🔄 Workflow Documentation
+# Workflow Documentation
 
-## Complete Crawling Workflow
+Detailed workflow processes for the Supa-Crawl LLM pipeline, from initial setup to production deployment.
 
-This document outlines the step-by-step workflow of the AsyncWebCrawler Advanced Implementation, showing how data flows through the system from initial URL input to final storage.
+## Overview
 
-## 📋 Workflow Overview
+The Supa-Crawl workflow encompasses four main phases:
+1. **Setup & Configuration**
+2. **Data Collection & Processing** 
+3. **Analysis & Storage**
+4. **Monitoring & Maintenance**
+
+## Workflow Phases
+
+### Phase 1: Setup & Configuration
+
+#### 1.1 Environment Preparation
+
+```bash
+# Step 1: Clone repository
+git clone https://github.com/Gaya56/supa-crawl.git
+cd supa-crawl
+
+# Step 2: Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# or .venv\Scripts\activate  # Windows
+
+# Step 3: Install dependencies
+pip install -r requirements.txt
+
+# Step 4: Install browser dependencies
+playwright install
+sudo playwright install-deps  # Linux/macOS
+```
+
+#### 1.2 Configuration Setup
+
+```bash
+# Create environment file
+cp .env.example .env
+
+# Configure required variables
+# OPENAI_API_KEY=sk-your-openai-key
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_KEY=your-anon-key
+```
+
+#### 1.3 Database Initialization
+
+```sql
+-- Execute in Supabase SQL editor
+CREATE TABLE pages (
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    url TEXT NOT NULL,
+    title TEXT,
+    summary TEXT,
+    content TEXT
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_pages_url ON pages(url);
+CREATE INDEX idx_pages_title ON pages(title);
+```
+
+### Phase 2: Data Collection & Processing
+
+#### 2.1 URL Preparation Workflow
 
 ```mermaid
-graph TD
-    A[URL Input] --> B[Environment Validation]
-    B --> C[Crawler Initialization]
-    C --> D{Dispatcher Selection}
-    
-    D -->|Memory Adaptive| E[Dynamic Resource Allocation]
-    D -->|Semaphore| F[Fixed Concurrency Control]
-    D -->|LLM Analysis| G[AI-Powered Extraction]
-    D -->|Full Pipeline| H[Complete Workflow]
-    
-    E --> I[Crawl4AI Execution]
-    F --> I
-    G --> I
-    H --> I
-    
-    I --> J[Content Extraction]
-    J --> K{LLM Analysis?}
-    
-    K -->|Yes| L[OpenAI GPT-4o Processing]
-    K -->|No| M[Basic Content Processing]
-    
-    L --> N[Schema Validation]
-    M --> N
-    
-    N --> O{Storage Required?}
-    
-    O -->|Yes| P[Supabase Storage]
-    O -->|No| Q[Return Results]
-    
-    P --> R[Real-time Updates]
-    R --> S[Webhook Notifications]
-    S --> Q
-    
-    Q --> T[Success Response]
+flowchart TD
+    A[Raw URL List] --> B{URL Validation}
+    B -->|Valid| C[Batch Creation]
+    B -->|Invalid| D[Error Log]
+    C --> E[Priority Assignment]
+    E --> F[Queue Management]
+    F --> G[Dispatcher Selection]
 ```
 
-## 🚀 Detailed Workflow Steps
-
-### Phase 1: Initialization & Configuration
-
-#### Step 1: Environment Setup
+**Implementation:**
 ```python
-# main.py - Entry point
-from src.config.environment import env_config
-
-# Load and validate environment variables
-env_config.validate_environment()
-```
-
-**Process**:
-1. Load environment variables from `.env` file
-2. Validate required keys (SUPABASE_URL, SUPABASE_KEY, etc.)
-3. Initialize logging and monitoring
-4. Set up error handling context
-
-**Validation Checks**:
-- ✅ Supabase URL format validation
-- ✅ API key presence verification
-- ✅ OpenAI key availability (optional)
-- ✅ Database connectivity test
-
-#### Step 2: Crawler Configuration
-```python
-# src/config/environment.py
-browser_config = CrawlerConfig.create_browser_config()
-crawler_config = CrawlerConfig.create_crawler_run_config()
-```
-
-**Official Crawl4AI Configuration**:
-```python
-BrowserConfig(
-    enable_stealth=True,        # Anti-detection measures
-    headless=True,              # Background operation
-    browser_type="chromium",    # Browser engine
-    extra_args=["--no-sandbox"] # Security settings
-)
-
-CrawlerRunConfig(
-    cache_mode=CacheMode.BYPASS,    # Fresh content only
-    mean_delay=0.1,                 # Rate limiting
-    max_range=0.3,                  # Delay variation
-    semaphore_count=5               # Concurrency limit
-)
-```
-
-### Phase 2: Dispatcher Selection & Execution
-
-#### Option A: Memory Adaptive Dispatcher
-
-**Purpose**: Dynamic resource allocation based on available system memory.
-
-**Workflow**:
-```python
-async def crawl_with_memory_adaptive_dispatcher(self, urls: List[str]):
-    # 1. Initialize Memory Adaptive Dispatcher
-    dispatcher = MemoryAdaptiveDispatcher()
+# URL validation and batching
+def prepare_urls(raw_urls: List[str]) -> List[List[str]]:
+    # Step 1: Validate URLs
+    valid_urls = [url for url in raw_urls if validate_url(url)]
     
-    # 2. Create crawler with stealth config
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        # 3. Execute crawling with automatic resource management
-        results = await crawler.arun_many(
-            urls, 
-            config=crawler_config,
-            dispatcher=dispatcher
-        )
-```
-
-**Performance Characteristics**:
-- **Concurrency**: 3-8 operations (dynamic based on memory)
-- **Memory Usage**: 50-200MB (adaptive)
-- **Best For**: Variable content sizes, unknown resource requirements
-
-#### Option B: Semaphore Dispatcher
-
-**Purpose**: Fixed concurrency control with predictable resource usage.
-
-**Workflow**:
-```python
-async def crawl_with_semaphore_dispatcher(self, urls: List[str]):
-    # 1. Initialize Semaphore Dispatcher
-    dispatcher = SemaphoreDispatcher(max_concurrent=5)
+    # Step 2: Create batches
+    batch_size = 10  # Configurable
+    batches = [valid_urls[i:i+batch_size] 
+               for i in range(0, len(valid_urls), batch_size)]
     
-    # 2. Execute with controlled concurrency
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        results = await crawler.arun_many(
-            urls,
-            config=crawler_config, 
-            dispatcher=dispatcher
-        )
-```
+    return batches
 
-**Performance Characteristics**:
-- **Concurrency**: 5 operations (fixed)
-- **Memory Usage**: 100-150MB (consistent)
-- **Best For**: Predictable workloads, rate-limited targets
-
-#### Option C: LLM-Powered Analysis
-
-**Purpose**: AI-driven content extraction with structured data output.
-
-**Workflow**:
-```python
-async def crawl_with_llm_analysis(self, urls: List[str]):
-    # 1. Configure LLM extraction strategy
-    llm_strategy = LLMExtractionStrategy(
-        llm_config=LLMConfig(
-            provider="openai/gpt-4o",
-            api_token=os.getenv("OPENAI_API_KEY")
-        ),
-        schema=PageSummary.model_json_schema(),
-        instruction="Extract title and summary from content"
-    )
-    
-    # 2. Execute with AI analysis
-    crawler_config = CrawlerRunConfig(
-        extraction_strategy=llm_strategy
-    )
-```
-
-**AI Processing Pipeline**:
-1. **Content Extraction**: Raw HTML → Clean markdown
-2. **LLM Processing**: Markdown → OpenAI GPT-4o → Structured JSON
-3. **Schema Validation**: JSON → Pydantic model validation
-4. **Result Integration**: Validated data → Final result structure
-
-### Phase 3: Content Processing & Validation
-
-#### Content Extraction Process
-```python
-# For each successfully crawled URL
-for result in crawler_results:
-    if result.success:
-        # Extract clean content
-        content = result.markdown.raw_markdown
-        
-        # Extract LLM analysis (if available)
-        analysis = json.loads(result.extracted_content) if result.extracted_content else None
-        
-        # Create structured result
-        crawl_result = CrawlResult(
-            url=result.url,
-            content=content,
-            analysis=analysis,
-            timestamp=datetime.now(),
-            success=True
-        )
-```
-
-#### Schema Validation
-```python
-# Pydantic model validation ensures data integrity
-class PageSummary(BaseModel):
-    title: str = Field(..., description="Page title")
-    summary: str = Field(..., description="Brief summary of content")
-
-# Automatic validation during creation
-page_summary = PageSummary(**analysis_data)
-```
-
-### Phase 4: Storage & Real-time Updates
-
-#### Supabase Storage Process
-```python
-async def store_crawl_results(self, results: List[CrawlResult]):
-    # 1. Prepare records for storage
-    records = []
-    for result in results:
-        record = {
-            "url": result.url,
-            "content": result.content,
-            "analysis_header": self._create_analysis_header(result.analysis)
-        }
-        records.append(record)
-    
-    # 2. Batch insert with error handling
+def validate_url(url: str) -> bool:
     try:
-        response = self.supabase.table('pages').insert(records).execute()
-        return True
-    except Exception as e:
-        logger.error(f"Storage failed: {e}")
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
         return False
 ```
 
-#### Real-time Features
-1. **Live Updates**: New crawl results appear immediately in connected clients
-2. **Webhook Notifications**: Trigger external systems on data changes
-3. **Analytics**: Real-time metrics and monitoring
+#### 2.2 Crawling Workflow
 
-## 📊 Performance Metrics
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant D as Dispatcher
+    participant E as Engine
+    participant M as Monitor
+    
+    C->>D: Submit URL batch
+    D->>D: Select strategy
+    D->>E: Initialize crawl
+    
+    loop For each URL
+        E->>M: Log start
+        E->>E: Fetch & scrape
+        E->>M: Log progress
+        E->>D: Return result
+    end
+    
+    D->>C: Batch results
+```
 
-### Timing Breakdown (Average for 2 URLs)
-
-| Phase | Memory Adaptive | Semaphore | LLM Analysis | Full Pipeline |
-|-------|----------------|-----------|--------------|---------------|
-| **Initialization** | 0.1s | 0.1s | 0.1s | 0.1s |
-| **Crawling** | 2.0s | 2.5s | 2.0s | 2.0s |
-| **LLM Processing** | - | - | 4.5s | 4.5s |
-| **Storage** | - | - | - | 0.5s |
-| **Total** | 2.1s | 2.6s | 6.6s | 7.1s |
-
-### Resource Usage
-
-| Metric | Memory Adaptive | Semaphore | LLM Analysis | Full Pipeline |
-|--------|----------------|-----------|--------------|---------------|
-| **Peak Memory** | 180MB | 140MB | 190MB | 200MB |
-| **CPU Usage** | 25% | 20% | 35% | 40% |
-| **Network I/O** | 2MB | 2MB | 3MB | 3.5MB |
-| **Success Rate** | 100% | 100% | 100% | 100% |
-
-## 🔄 Error Handling Workflow
-
-### 1. Network Failures
+**Dispatcher Selection Logic:**
 ```python
-# Automatic retry with exponential backoff
-async def crawl_with_retry(url: str, max_retries: int = 3):
+async def select_dispatcher(urls: List[str], system_resources: Dict) -> str:
+    url_count = len(urls)
+    memory_usage = system_resources['memory_percent']
+    
+    if url_count > 50 or memory_usage > 70:
+        return "semaphore"  # Controlled concurrency
+    else:
+        return "memory_adaptive"  # Optimized resource usage
+```
+
+### Phase 3: Analysis & Storage
+
+#### 3.1 LLM Analysis Workflow
+
+```mermaid
+flowchart TD
+    A[Raw Content] --> B[Content Preprocessing]
+    B --> C[LLM Strategy Setup]
+    C --> D[OpenAI API Call]
+    D --> E{Response Valid?}
+    E -->|Yes| F[Pydantic Validation]
+    E -->|No| G[Retry Logic]
+    F --> H[Structured Data]
+    G --> D
+    H --> I[Storage Preparation]
+```
+
+**LLM Processing Implementation:**
+```python
+async def process_with_llm(content: str) -> Dict[str, str]:
+    # Step 1: Prepare extraction strategy
+    strategy = LLMExtractionStrategy(
+        provider="openai/gpt-4o-mini",
+        api_token=os.getenv('OPENAI_API_KEY'),
+        schema=PageSummary.model_json_schema(),
+        instruction="""
+        Extract the main title and create a concise summary.
+        Focus on the core purpose and value of the content.
+        Keep the summary to 1-2 sentences.
+        """
+    )
+    
+    # Step 2: Execute extraction
+    result = await strategy.extract(content)
+    
+    # Step 3: Validate and return
+    if result and isinstance(result, list) and len(result) > 0:
+        return result[0]
+    else:
+        return {"title": "No title extracted", "summary": "No summary extracted"}
+```
+
+#### 3.2 Storage Workflow
+
+```mermaid
+flowchart TD
+    A[Structured Data] --> B{Duplicate Check}
+    B -->|New| C[Insert Record]
+    B -->|Exists| D[Update Record]
+    C --> E[Success Log]
+    D --> E
+    E --> F[Index Update]
+    F --> G[Backup Trigger]
+```
+
+**Storage Implementation:**
+```python
+def store_page_summary(self, url: str, title: str, summary: str, raw_markdown: str = None):
+    try:
+        # Upsert operation to handle duplicates
+        data = {
+            'url': url,
+            'title': title,
+            'summary': summary,
+            'content': raw_markdown
+        }
+        
+        response = self.client.table('pages').upsert(data).execute()
+        
+        if response.data:
+            logger.info(f"✓ Stored page summary: {url}")
+            return response
+        else:
+            logger.warning(f"⚠ No data returned for: {url}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"✗ Failed to store {url}: {str(e)}")
+        return None
+```
+
+### Phase 4: Monitoring & Maintenance
+
+#### 4.1 Real-time Monitoring Workflow
+
+```mermaid
+graph TD
+    A[System Metrics] --> B[Performance Dashboard]
+    C[Error Logs] --> B
+    D[Success Rates] --> B
+    E[Resource Usage] --> B
+    
+    B --> F{Threshold Check}
+    F -->|Normal| G[Continue Operations]
+    F -->|Alert| H[Notification System]
+    H --> I[Admin Response]
+```
+
+**Monitoring Implementation:**
+```python
+class MonitoringSystem:
+    def __init__(self):
+        self.metrics = {
+            'crawls_successful': 0,
+            'crawls_failed': 0,
+            'llm_calls': 0,
+            'storage_operations': 0
+        }
+    
+    def log_crawl_success(self, url: str, duration: float):
+        self.metrics['crawls_successful'] += 1
+        logger.info(f"✓ Crawl success: {url} ({duration:.2f}s)")
+    
+    def log_crawl_failure(self, url: str, error: str):
+        self.metrics['crawls_failed'] += 1
+        logger.error(f"✗ Crawl failed: {url} - {error}")
+    
+    def get_success_rate(self) -> float:
+        total = self.metrics['crawls_successful'] + self.metrics['crawls_failed']
+        return self.metrics['crawls_successful'] / total if total > 0 else 0
+```
+
+## Complete End-to-End Workflow
+
+### Production Deployment Process
+
+```mermaid
+flowchart TD
+    A[Development] --> B[Testing]
+    B --> C[Staging Deployment]
+    C --> D[Performance Validation]
+    D --> E{Ready for Production?}
+    E -->|Yes| F[Production Deployment]
+    E -->|No| G[Issue Resolution]
+    G --> B
+    F --> H[Monitoring Setup]
+    H --> I[Operational Readiness]
+```
+
+### Daily Operations Workflow
+
+```python
+async def daily_crawl_operation():
+    """Complete daily crawling workflow"""
+    
+    # Phase 1: Preparation
+    logger.info("🚀 Starting daily crawl operation")
+    urls = load_target_urls()
+    
+    # Phase 2: System Check
+    if not check_system_health():
+        logger.error("❌ System health check failed")
+        return False
+    
+    # Phase 3: Processing
+    crawler = AdvancedWebCrawler()
+    
+    try:
+        # Execute with monitoring
+        results = await crawler.crawl_with_llm_analysis(urls)
+        
+        # Phase 4: Storage
+        storage_success = await crawler.store_results(results)
+        
+        # Phase 5: Reporting
+        generate_daily_report(results)
+        
+        logger.info("✅ Daily operation completed successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Daily operation failed: {str(e)}")
+        send_alert_notification(str(e))
+        return False
+```
+
+## Error Handling Workflows
+
+### Retry Logic Workflow
+
+```mermaid
+flowchart TD
+    A[Operation Start] --> B{Attempt Operation}
+    B -->|Success| C[Return Result]
+    B -->|Failure| D{Retries Left?}
+    D -->|Yes| E[Wait Backoff]
+    E --> F[Increment Attempt]
+    F --> B
+    D -->|No| G[Log Failure]
+    G --> H[Return Error]
+```
+
+**Retry Implementation:**
+```python
+async def retry_with_backoff(operation, max_retries=3, base_delay=1):
     for attempt in range(max_retries):
         try:
-            result = await crawler.arun(url)
-            if result.success:
-                return result
+            return await operation()
         except Exception as e:
-            wait_time = 2 ** attempt
-            await asyncio.sleep(wait_time)
+            if attempt == max_retries - 1:
+                raise e
+            
+            delay = base_delay * (2 ** attempt)  # Exponential backoff
+            logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+            await asyncio.sleep(delay)
+```
+
+## Quality Assurance Workflow
+
+### Data Quality Checks
+
+```python
+def validate_extraction_quality(result: Dict[str, Any]) -> bool:
+    """Validate LLM extraction results"""
     
-    return failed_result
+    checks = [
+        # Title quality
+        len(result.get('title', '')) > 5,
+        'title' not in result.get('title', '').lower(),
+        
+        # Summary quality  
+        len(result.get('summary', '')) > 20,
+        'summary' not in result.get('summary', '').lower(),
+        
+        # Content coherence
+        result.get('title') != result.get('summary')
+    ]
+    
+    return all(checks)
 ```
 
-### 2. LLM Processing Failures
+### Performance Optimization Workflow
+
+```mermaid
+flowchart TD
+    A[Performance Baseline] --> B[Bottleneck Identification]
+    B --> C[Optimization Strategy]
+    C --> D[Implementation]
+    D --> E[Performance Testing]
+    E --> F{Improvement Achieved?}
+    F -->|Yes| G[Deploy Optimization]
+    F -->|No| H[Alternative Strategy]
+    H --> C
+    G --> I[Monitor Impact]
+```
+
+## Backup & Recovery Workflow
+
+### Data Backup Process
+
 ```python
-# Graceful degradation
-try:
-    analysis = await llm_processor.analyze(content)
-except Exception:
-    analysis = {"title": "Extraction Failed", "summary": "Manual review required"}
+async def backup_workflow():
+    """Automated backup process"""
+    
+    # 1. Create backup snapshot
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_name = f"supa_crawl_backup_{timestamp}"
+    
+    # 2. Export data
+    pages_data = await export_pages_table()
+    
+    # 3. Store backup
+    backup_location = f"backups/{backup_name}.json"
+    with open(backup_location, 'w') as f:
+        json.dump(pages_data, f, indent=2)
+    
+    # 4. Verify backup integrity
+    if verify_backup(backup_location):
+        logger.info(f"✅ Backup completed: {backup_name}")
+    else:
+        logger.error(f"❌ Backup verification failed: {backup_name}")
 ```
 
-### 3. Storage Failures
+## Maintenance Workflows
+
+### Weekly Maintenance Tasks
+
 ```python
-# Local caching with retry
-async def store_with_fallback(results):
-    try:
-        await supabase_handler.store(results)
-    except Exception:
-        await local_cache.store(results)
-        await schedule_retry()
+async def weekly_maintenance():
+    """Weekly system maintenance"""
+    
+    tasks = [
+        cleanup_old_logs(),
+        optimize_database_indexes(),
+        update_system_dependencies(),
+        generate_performance_report(),
+        backup_configuration_files()
+    ]
+    
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Report maintenance results
+    for i, result in enumerate(results):
+        task_name = tasks[i].__name__
+        if isinstance(result, Exception):
+            logger.error(f"❌ Maintenance task failed: {task_name} - {result}")
+        else:
+            logger.info(f"✅ Maintenance task completed: {task_name}")
 ```
 
-## 🎯 Quality Assurance
-
-### 1. Content Validation
-- **Length Checks**: Minimum content requirements
-- **Format Validation**: Proper markdown structure
-- **Encoding Verification**: UTF-8 compliance
-
-### 2. LLM Output Validation
-- **Schema Compliance**: Pydantic model validation
-- **Content Quality**: Relevance scoring
-- **Hallucination Detection**: Consistency checks
-
-### 3. Storage Integrity
-- **Duplicate Prevention**: URL-based deduplication
-- **Data Consistency**: Transaction-based operations
-- **Backup Verification**: Automated integrity checks
-
-## 🚀 Optimization Strategies
-
-### 1. Performance Optimization
-- **Connection Pooling**: Reuse browser instances
-- **Parallel Processing**: Concurrent operations where possible
-- **Caching**: Intelligent content caching strategies
-
-### 2. Resource Optimization
-- **Memory Management**: Automatic garbage collection
-- **CPU Throttling**: Adaptive processing limits
-- **I/O Optimization**: Batched database operations
-
-### 3. Cost Optimization
-- **LLM Usage**: Smart content filtering before analysis
-- **Database Efficiency**: Optimized queries and indexes
-- **Network Usage**: Compression and minimal transfers
-
-This comprehensive workflow ensures reliable, performant, and scalable web crawling operations while maintaining data quality and system stability.
+This comprehensive workflow documentation ensures smooth operations and maintainable processes for the Supa-Crawl system.

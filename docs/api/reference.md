@@ -1,130 +1,85 @@
-# 📚 API Reference
+# API Reference
 
-## Core Classes and Methods
+Complete documentation for all Supa-Crawl components and methods.
+
+## Core Classes
 
 ### AdvancedWebCrawler
 
-The main orchestrator class that provides high-level crawling capabilities with multiple dispatch strategies.
-
-#### Class Definition
-```python
-class AdvancedWebCrawler:
-    """
-    Advanced web crawling implementation with multiple dispatch strategies,
-    LLM integration, and real-time storage capabilities.
-    
-    Features:
-    - Memory adaptive resource management
-    - Semaphore-based concurrency control  
-    - OpenAI GPT-4o content analysis
-    - Supabase real-time storage
-    - Stealth browsing configuration
-    """
-```
+The main crawling engine with multiple dispatch strategies and LLM integration.
 
 #### Methods
 
-##### `crawl_with_memory_adaptive_dispatcher(urls: List[str]) -> List[CrawlResult]`
+##### `crawl_with_memory_adaptive_dispatcher(urls: List[str]) -> List[Dict[str, Any]]`
 
-Crawls URLs using memory adaptive resource allocation.
+Crawls URLs using memory-adaptive resource management.
 
 **Parameters:**
 - `urls` (List[str]): List of URLs to crawl
 
 **Returns:**
-- `List[CrawlResult]`: List of crawl results with success status
+- `List[Dict[str, Any]]`: Crawl results with URL, raw_markdown, and metadata
 
 **Example:**
 ```python
 crawler = AdvancedWebCrawler()
 results = await crawler.crawl_with_memory_adaptive_dispatcher([
     "https://example.com",
-    "https://docs.crawl4ai.com/"
+    "https://docs.crawl4ai.com"
 ])
-
-for result in results:
-    print(f"URL: {result.url}")
-    print(f"Success: {result.success}")
-    print(f"Content Length: {len(result.content)}")
 ```
 
-**Performance Characteristics:**
-- **Concurrency**: 3-8 operations (dynamic)
-- **Memory Usage**: 50-200MB (adaptive)
-- **Best Use Case**: Variable content sizes
+##### `crawl_with_semaphore_dispatcher(urls: List[str]) -> List[Dict[str, Any]]`
 
----
-
-##### `crawl_with_semaphore_dispatcher(urls: List[str]) -> List[CrawlResult]`
-
-Crawls URLs with fixed concurrency control using semaphore.
+Crawls URLs with controlled concurrency using semaphore pattern.
 
 **Parameters:**
 - `urls` (List[str]): List of URLs to crawl
 
 **Returns:**
-- `List[CrawlResult]`: List of crawl results with timing information
+- `List[Dict[str, Any]]`: Crawl results with timing and success metrics
 
 **Example:**
 ```python
-results = await crawler.crawl_with_semaphore_dispatcher([
-    "https://example.com",
-    "https://docs.crawl4ai.com/api/parameters/"
-])
-
-# Results include timing metrics
+results = await crawler.crawl_with_semaphore_dispatcher(urls)
 for result in results:
-    print(f"Fetch Time: {result.timing.fetch_time}s")
-    print(f"Process Time: {result.timing.process_time}s")
+    print(f"URL: {result['url']}, Success: {result['success']}")
 ```
 
-**Performance Characteristics:**
-- **Concurrency**: 5 operations (fixed)
-- **Memory Usage**: 100-150MB (consistent)
-- **Best Use Case**: Predictable workloads
+##### `crawl_with_llm_analysis(urls: List[str]) -> List[Dict[str, Any]]`
 
----
-
-##### `crawl_with_llm_analysis(urls: List[str]) -> List[CrawlResult]`
-
-Crawls URLs and performs AI-powered content analysis using OpenAI GPT-4o.
+Performs intelligent crawling with LLM-powered content analysis.
 
 **Parameters:**
 - `urls` (List[str]): List of URLs to crawl and analyze
 
 **Returns:**
-- `List[CrawlResult]`: List of results with LLM analysis data
+- `List[Dict[str, Any]]`: Results including LLM analysis with title and summary
+
+**Response Structure:**
+```python
+{
+    'url': 'https://example.com',
+    'raw_markdown': '# Example Domain...',
+    'analysis': [{
+        'title': 'Example Domain',
+        'summary': 'A demonstration page for documentation examples.'
+    }],
+    'success': True
+}
+```
 
 **Example:**
 ```python
 results = await crawler.crawl_with_llm_analysis([
-    "https://docs.crawl4ai.com/"
+    "https://docs.crawl4ai.com"
 ])
 
 for result in results:
-    if result.analysis:
-        print(f"Title: {result.analysis['title']}")
-        print(f"Summary: {result.analysis['summary']}")
+    analysis = result['analysis'][0]
+    print(f"Title: {analysis['title']}")
+    print(f"Summary: {analysis['summary']}")
 ```
-
-**LLM Configuration:**
-```python
-llm_strategy = LLMExtractionStrategy(
-    llm_config=LLMConfig(
-        provider="openai/gpt-4o",
-        api_token=os.getenv("OPENAI_API_KEY")
-    ),
-    schema=PageSummary.model_json_schema(),
-    instruction="Provide a brief summary of the page content and its title."
-)
-```
-
-**Performance Characteristics:**
-- **Processing Time**: 3-8 seconds per URL
-- **API Costs**: ~$0.01-0.05 per analysis
-- **Accuracy**: 95%+ content extraction
-
----
 
 ##### `crawl_and_store_in_supabase(urls: List[str]) -> bool`
 
@@ -134,399 +89,217 @@ Complete pipeline: crawl URLs, perform LLM analysis, and store in Supabase.
 - `urls` (List[str]): List of URLs to process
 
 **Returns:**
-- `bool`: True if all operations succeeded, False otherwise
+- `bool`: True if all operations completed successfully
 
 **Example:**
 ```python
 success = await crawler.crawl_and_store_in_supabase([
-    "https://docs.crawl4ai.com/",
+    "https://example.com",
     "https://docs.crawl4ai.com/api/parameters/"
 ])
 
 if success:
-    print("✅ All URLs processed and stored successfully")
-else:
-    print("❌ Some operations failed")
+    print("All URLs processed and stored successfully!")
 ```
 
-**Storage Process:**
-1. Crawl content with LLM analysis
-2. Validate data using Pydantic schemas
-3. Store in Supabase with analysis headers
-4. Trigger real-time updates
-5. Send webhook notifications
+### SupabaseHandler
 
----
-
-## Configuration Classes
-
-### EnvironmentConfig
-
-Manages environment variables and system configuration.
-
-#### Class Definition
-```python
-class EnvironmentConfig:
-    """
-    Environment configuration management with validation.
-    Loads and validates all required environment variables.
-    """
-    
-    supabase_url: str
-    supabase_key: str
-    openai_api_key: Optional[str]
-```
+Manages database operations and data persistence.
 
 #### Methods
 
-##### `validate_environment() -> bool`
+##### `store_page_summary(url: str, title: str, summary: str, raw_markdown: str = None) -> Dict[str, Any]`
 
-Validates all required environment variables are present and correctly formatted.
+Stores page analysis results using the structured schema.
+
+**Parameters:**
+- `url` (str): The webpage URL
+- `title` (str): AI-generated page title
+- `summary` (str): AI-generated content summary
+- `raw_markdown` (str, optional): Raw page content
 
 **Returns:**
-- `bool`: True if validation passes
+- `Dict[str, Any]`: Supabase response object
 
 **Example:**
 ```python
-from src.config.environment import env_config
+storage = SupabaseHandler()
+response = storage.store_page_summary(
+    url="https://example.com",
+    title="Example Domain",
+    summary="A demonstration page for documentation examples.",
+    raw_markdown="# Example Domain\nThis domain is for use in examples..."
+)
+```
 
-if env_config.validate_environment():
-    print("✅ Environment configuration valid")
+##### `store_crawl_results(results: List[Dict[str, Any]]) -> int`
+
+Legacy method for storing crawl results (use store_page_summary for new code).
+
+**Parameters:**
+- `results` (List[Dict[str, Any]]): List of crawl result dictionaries
+
+**Returns:**
+- `int`: Number of successfully stored records
+
+#### Properties
+
+##### `is_available: bool`
+
+Indicates whether Supabase client is properly configured and available.
+
+**Example:**
+```python
+storage = SupabaseHandler()
+if storage.is_available:
+    print("Supabase connection ready")
 else:
-    print("❌ Environment configuration invalid")
+    print("Check SUPABASE_URL and SUPABASE_KEY environment variables")
 ```
-
-**Validation Checks:**
-- Supabase URL format
-- API key presence
-- Database connectivity
-- Optional service availability
-
----
-
-### CrawlerConfig
-
-Factory class for creating official Crawl4AI configurations.
-
-#### Static Methods
-
-##### `create_browser_config() -> BrowserConfig`
-
-Creates official BrowserConfig with stealth settings.
-
-**Returns:**
-- `BrowserConfig`: Configured browser instance
-
-**Example:**
-```python
-browser_config = CrawlerConfig.create_browser_config()
-
-# Configuration includes:
-# - Stealth mode enabled
-# - Headless operation
-# - Anti-detection measures
-# - Security settings
-```
-
-##### `create_crawler_run_config() -> CrawlerRunConfig`
-
-Creates official CrawlerRunConfig with rate limiting.
-
-**Returns:**
-- `CrawlerRunConfig`: Configured crawler runtime
-
-**Example:**
-```python
-crawler_config = CrawlerConfig.create_crawler_run_config()
-
-# Configuration includes:
-# - Cache bypass
-# - Rate limiting (0.1-0.3s delays)
-# - Concurrency limits
-# - Error handling
-```
-
----
 
 ## Data Models
 
 ### PageSummary
 
-Pydantic model for LLM extraction results.
+Pydantic model defining the structure for LLM-extracted content.
 
 ```python
+from pydantic import BaseModel, Field
+
 class PageSummary(BaseModel):
-    """
-    Schema for OpenAI GPT-4o content analysis results.
-    Used for structured data extraction from web pages.
-    """
-    title: str = Field(..., description="Page title")
-    summary: str = Field(..., description="Brief summary of page content")
+    title: str = Field(description="The main title of the web page")
+    summary: str = Field(description="A short paragraph summary of the page content")
 ```
 
-**Usage:**
+**Usage in LLM Strategy:**
 ```python
-# Automatic validation during LLM processing
-analysis_data = {"title": "Example Page", "summary": "This is an example"}
-page_summary = PageSummary(**analysis_data)
-```
+from crawl4ai.extraction_strategy import LLMExtractionStrategy
 
----
-
-### CrawlResult
-
-Standardized crawler output structure.
-
-```python
-class CrawlResult(BaseModel):
-    """
-    Standardized result structure for all crawling operations.
-    Contains content, metadata, and analysis information.
-    """
-    url: str
-    content: str
-    analysis: Optional[Dict[str, Any]] = None
-    timestamp: datetime
-    success: bool
-    timing: Optional[TimingInfo] = None
-```
-
-**Example:**
-```python
-result = CrawlResult(
-    url="https://example.com",
-    content="Page content...",
-    analysis={"title": "Example", "summary": "..."},
-    timestamp=datetime.now(),
-    success=True
+strategy = LLMExtractionStrategy(
+    provider="openai/gpt-4o-mini",
+    api_token=os.getenv('OPENAI_API_KEY'),
+    schema=PageSummary.model_json_schema(),
+    instruction="Extract the main title and create a concise summary..."
 )
 ```
 
----
+## Configuration Classes
 
-### SupabaseRecord
+### Environment Configuration
 
-Database record format for storage operations.
+Managed by `src/config/environment.py`:
 
 ```python
-class SupabaseRecord(BaseModel):
-    """
-    Database record structure for Supabase storage.
-    Optimized for real-time updates and analytics.
-    """
-    url: str
-    content: str
-    analysis_header: Optional[str] = None
-    created_at: datetime
+from src.config.environment import env_config
+
+# Access configuration
+print(f"Supabase URL: {env_config.supabase_url}")
+print(f"OpenAI configured: {env_config.openai_api_key is not None}")
 ```
-
----
-
-## Storage Classes
-
-### SupabaseHandler
-
-Handles all database operations and real-time management.
-
-#### Methods
-
-##### `store_crawl_results(results: List[CrawlResult]) -> bool`
-
-Stores crawl results in Supabase with analysis headers.
-
-**Parameters:**
-- `results` (List[CrawlResult]): Results to store
-
-**Returns:**
-- `bool`: Success status
-
-**Example:**
-```python
-handler = SupabaseHandler()
-success = await handler.store_crawl_results(crawl_results)
-```
-
-##### `get_crawl_history(limit: int = 100) -> List[SupabaseRecord]`
-
-Retrieves historical crawl data.
-
-**Parameters:**
-- `limit` (int): Maximum records to return
-
-**Returns:**
-- `List[SupabaseRecord]`: Historical data
-
-**Example:**
-```python
-history = await handler.get_crawl_history(limit=50)
-for record in history:
-    print(f"URL: {record.url}")
-    print(f"Date: {record.created_at}")
-```
-
-##### `setup_realtime_subscription() -> None`
-
-Configures real-time change notifications.
-
-**Example:**
-```python
-await handler.setup_realtime_subscription()
-# Real-time updates now active
-```
-
----
 
 ## Error Handling
 
-### Exception Classes
+All methods include comprehensive error handling:
 
-#### `CrawlError`
 ```python
-class CrawlError(Exception):
-    """Base exception for crawling operations."""
-    pass
+try:
+    results = await crawler.crawl_with_llm_analysis(urls)
+    if not results:
+        print("No results returned - check URLs and network connection")
+except Exception as e:
+    print(f"Crawling failed: {str(e)}")
 ```
 
-#### `LLMProcessingError`
-```python
-class LLMProcessingError(CrawlError):
-    """Exception raised during LLM content analysis."""
-    pass
+## Database Schema
+
+### Pages Table
+
+```sql
+CREATE TABLE pages (
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    url TEXT NOT NULL,
+    title TEXT,           -- AI-generated title
+    summary TEXT,         -- AI-generated summary
+    content TEXT          -- Raw markdown content
+);
 ```
 
-#### `StorageError`
-```python
-class StorageError(CrawlError):
-    """Exception raised during database operations."""
-    pass
+### Query Examples
+
+```sql
+-- Get all pages with summaries
+SELECT url, title, summary FROM pages WHERE summary IS NOT NULL;
+
+-- Search by title content
+SELECT * FROM pages WHERE title ILIKE '%crawl4ai%';
+
+-- Get recent entries
+SELECT * FROM pages ORDER BY id DESC LIMIT 10;
 ```
 
-### Error Handling Patterns
+## Rate Limiting & Performance
 
-#### Retry Logic
+### Concurrency Control
+
 ```python
-async def with_retry(func, max_retries: int = 3):
-    """Execute function with exponential backoff retry."""
-    for attempt in range(max_retries):
-        try:
-            return await func()
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            wait_time = 2 ** attempt
-            await asyncio.sleep(wait_time)
+# Semaphore dispatcher with custom limits
+from asyncio import Semaphore
+
+# Configure in crawler initialization
+MAX_CONCURRENT = 5
+semaphore = Semaphore(MAX_CONCURRENT)
 ```
 
-#### Graceful Degradation
+### Memory Management
+
 ```python
-async def safe_llm_analysis(content: str) -> Dict[str, Any]:
-    """LLM analysis with fallback to basic extraction."""
-    try:
-        return await llm_analyzer.analyze(content)
-    except LLMProcessingError:
-        return {
-            "title": extract_title_fallback(content),
-            "summary": "Analysis unavailable"
-        }
+# Memory adaptive dispatcher automatically adjusts based on:
+# - Content size
+# - Available system memory  
+# - Processing complexity
 ```
 
----
+## Response Formats
 
-## Configuration Options
+### Standard Crawl Result
 
-### Browser Configuration
 ```python
-BrowserConfig(
-    enable_stealth=True,           # Anti-detection measures
-    headless=True,                 # Background operation
-    browser_type="chromium",       # Browser engine
-    extra_args=[                   # Additional arguments
-        "--no-sandbox",
-        "--disable-dev-shm-usage"
-    ]
-)
+{
+    'url': 'https://example.com',
+    'raw_markdown': '# Page Content...',
+    'success': True,
+    'error': None,
+    'timestamp': '2025-09-06T04:00:00Z'
+}
 ```
 
-### Crawler Configuration
+### LLM Analysis Result
+
 ```python
-CrawlerRunConfig(
-    cache_mode=CacheMode.BYPASS,   # Fresh content only
-    mean_delay=0.1,                # Average delay between requests
-    max_range=0.3,                 # Maximum delay variation
-    semaphore_count=5,             # Concurrent operation limit
-    word_count_threshold=1,        # Minimum content length
-    extraction_strategy=llm_strategy # Optional LLM integration
-)
+{
+    'url': 'https://example.com',
+    'raw_markdown': '# Page Content...',
+    'analysis': [{
+        'title': 'Page Title',
+        'summary': 'Content summary...'
+    }],
+    'success': True,
+    'llm_tokens_used': 150
+}
 ```
 
-### LLM Configuration
+### Supabase Storage Response
+
 ```python
-LLMConfig(
-    provider="openai/gpt-4o",      # LLM provider
-    api_token=os.getenv("OPENAI_API_KEY"),
-    extra_args={
-        "temperature": 0,           # Deterministic output
-        "max_tokens": 1000         # Response limit
-    }
-)
+{
+    'data': [{
+        'id': 42,
+        'url': 'https://example.com',
+        'title': 'Page Title',
+        'summary': 'Content summary...',
+        'content': '# Page Content...'
+    }],
+    'count': 1,
+    'status': 201
+}
 ```
-
----
-
-## Usage Examples
-
-### Basic Crawling
-```python
-import asyncio
-from src.crawlers.async_crawler import AdvancedWebCrawler
-
-async def main():
-    crawler = AdvancedWebCrawler()
-    
-    # Simple crawling
-    results = await crawler.crawl_with_memory_adaptive_dispatcher([
-        "https://example.com"
-    ])
-    
-    for result in results:
-        print(f"Success: {result.success}")
-        print(f"Content: {result.content[:100]}...")
-
-asyncio.run(main())
-```
-
-### Advanced Usage with LLM
-```python
-async def advanced_analysis():
-    crawler = AdvancedWebCrawler()
-    
-    # AI-powered analysis
-    results = await crawler.crawl_with_llm_analysis([
-        "https://docs.crawl4ai.com/"
-    ])
-    
-    for result in results:
-        if result.analysis:
-            print(f"Title: {result.analysis['title']}")
-            print(f"Summary: {result.analysis['summary']}")
-
-asyncio.run(advanced_analysis())
-```
-
-### Complete Pipeline
-```python
-async def full_pipeline():
-    crawler = AdvancedWebCrawler()
-    
-    # Complete workflow with storage
-    success = await crawler.crawl_and_store_in_supabase([
-        "https://docs.crawl4ai.com/",
-        "https://docs.crawl4ai.com/api/parameters/"
-    ])
-    
-    print(f"Pipeline success: {success}")
-
-asyncio.run(full_pipeline())
-```
-
-This API reference provides comprehensive documentation for all classes, methods, and configuration options in the AsyncWebCrawler Advanced Implementation.
