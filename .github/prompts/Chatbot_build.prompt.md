@@ -1,44 +1,138 @@
 ---
 mode: agent
 ---
-Define the task to achieve, including specific requirements, constraints, and success criteria.**Agent Prompt – Supabase Chatbot Plan (LLM‑playground branch)**
 
-To add a lightweight terminal chatbot to the `supa‑crawl` repository, re‑use existing configuration modules and follow patterns from the official Supabase and Crawl4AI documentation. Below is a suggested plan:
-Build a Terminal Chatbot for Supabase (LLM-playground branch)
+# Supabase Chatbot Plan (LLM-Playground Branch)
 
-Analyze only:
+## Overview
+Create a lightweight terminal chatbot for querying the `pages` table in Supabase. The chatbot will use `supabase-py` for database interactions and optionally leverage Crawl4AI’s LLM extraction strategy for summarizing results. The chatbot will be implemented in a new `chatbot/` directory, reusing existing environment configuration modules.
 
+## Pre-flight Checklist
+Use ALL MCPs each step:
 
-* Create a new `chatbot/` directory at the project root. Keeping it separate from `src/` isolates conversational logic from crawling and storage code while still allowing imports.
-* Inside `chatbot/`, add `chatbot.py` as the main entry point and possibly a `queries.py` module for SQL snippets. Avoid placing chatbot code in `supabase/` (reserved for database migrations) or `src/` (contains crawler logic).
-* Reuse `EnvironmentConfig` from `src/config/environment.py` to load `SUPABASE_URL`, `SUPABASE_KEY` and validate credentials.
+    sequentialthinking (plan)
+    supabase (queries, schema validation, inserts)
+    brave-search (verify in official Supabase docs)
+    filesystem (read/write reports)
+    memory (track lessons + state)
 
-### 2. Supabase client set‑up
+## Step-by-Step Plan
 
-* Follow the official Supabase‑py initialisation pattern used in `SupabaseHandler`: call `create_client(env_config.supabase_url, env_config.supabase_key)`.
-* Read and validate credentials via `env_config` just as the crawler does, ensuring the chatbot fails gracefully if keys are missing.
-* For local development, use the Supabase CLI to start the services (`supabase init`, then `supabase start`) and verify that the `pages` table exists via migrations in `supabase/migrations`.
+### 1. Directory Setup
+- Create a `chatbot/` directory at the project root to isolate conversational logic.
+- Add `chatbot.py` as the main entry point and `queries.py` for reusable SQL snippets.
+- Avoid placing chatbot code in `supabase/` (reserved for migrations) or `src/` (crawler logic).
 
-### 3. Natural‑language processing strategy
+### 2. Supabase Client Setup
+- Reuse `EnvironmentConfig` from `src/config/environment.py` to load `SUPABASE_URL` and `SUPABASE_KEY`.
+- Initialize the Supabase client using `create_client(env_config.supabase_url, env_config.supabase_key)`.
+- Validate credentials and ensure graceful failure if keys are missing.
+- Use the Supabase CLI to start services locally (`supabase init`, `supabase start`) and verify the `pages` table exists.
 
-* To translate natural language questions into SQL queries, you have two options:
+### 3. Natural Language Processing Strategy
+- **Option 1: Hand-Crafted Patterns**
+  - Define common question patterns (e.g., “show latest summaries”) in `queries.py`.
+  - Use Supabase Python client methods like `.select()` and `.eq()` to fetch data.
+- **Option 2: LLM Assistance**
+  - Use Crawl4AI’s `LLMExtractionStrategy` to interpret user input.
+  - Define a Pydantic schema (e.g., `{question: str, sql_query: str}`) and prompt an LLM to generate SQL queries.
+  - Provide the LLM with table schema context (columns: `url`, `title`, `summary`, `content`).
+- Start with hand-crafted patterns for the MVP.
 
-  1. **Hand‑crafted patterns:** define common question patterns (e.g. “show latest summaries”) in `queries.py` and map them to Supabase queries. Use the Supabase Python client’s `.select()` and `.eq()` methods to fetch data.
-  2. **LLM assistance:** leverage Crawl4AI’s LLM extraction to interpret arbitrary user input. Official LLM strategy documentation explains that `LLMExtractionStrategy` can be used to extract structured JSON from unstructured text. You could define a Pydantic schema like `{question: str, sql_query: str}` and prompt an LLM (via Crawl4AI or OpenAI API) to generate SQL. This would require providing the LLM with table schema context (columns `url`, `title`, `summary`, `content`).
-* For a minimal viable product, start with hand‑crafted patterns and only add LLM interpretation if flexibility is needed.
+### 4. Building the Terminal Chatbot
+- Implement a REPL in `chatbot.py` to prompt the user for input and handle exit commands.
+- Use `supabase.table("pages").select(...)` to execute queries.
+- Format response data into a readable string and print it to the user.
+- Optionally, use `LLMExtractionStrategy` to summarize long results.
 
-### 4. Building the terminal chatbot
+### 5. Additional Considerations
+- Place reusable query logic (e.g., list all page summaries, fetch by URL) in `chatbot/queries.py`.
+- Ensure proper imports by adding `chatbot/` to `sys.path` or packaging it under `src/`.
+- Update `.env` to include any extra variables (e.g., `OPENAI_API_KEY`).
+- Document usage in the repository’s README.
 
-* Implement a loop in `chatbot.py` that prompts the user for input and handles exit commands.
-* On each question, call `supabase.table("pages").select(...)` or other Supabase‑py methods to execute queries. The `.execute()` call returns a response with `.data` similar to the storage handler’s insertion logic.
-* Format the response data into a readable string and print it back to the user.
-* Optionally, call `LLMExtractionStrategy` via Crawl4AI to summarise long results before displaying them—Crawl4AI docs note that summarisation is ideal for unstructured content.
+## Implementation Guide
 
-### 5. Additional considerations
+### Prerequisites
+- Supabase CLI installed.
+- Docker (required by the CLI).
+- Python ≥3.8 with `pip`.
+- Install dependencies:
+  ```bash
+  python -m venv .venv && source .venv/bin/activate
+  pip install supabase crawl4ai python-dotenv
+  ```
 
-* Place reusable query logic (e.g. list all page summaries, fetch by URL) in `chatbot/queries.py`.
-* Ensure new modules are imported correctly by adding `chatbot/` to `sys.path` in `chatbot.py` or by packaging it under `src/` if preferred.
-* Update `.env` to include any extra variables needed for LLM access (e.g. `OPENAI_API_KEY`) and rely on existing validation methods.
-* Document usage in the repository’s README, explaining how to run the chatbot and that Supabase services must be running via CLI commands.
+### File Tree
+```
+supa-crawl/
+├── chatbot/
+│   ├── chatbot.py     # REPL implementation
+│   └── queries.py     # Helper functions for Supabase queries
+...
+```
 
-This plan keeps the chatbot separate yet integrated with existing environment handling and Supabase connectivity, aligns with official documentation, and remains lightweight for terminal use.
+### Example Code
+
+#### `chatbot/queries.py`
+```python
+def latest_pages(supabase, limit=5):
+    return supabase.table("pages").select("*").order("id", desc=True).limit(limit).execute()
+
+def find_page_by_url(supabase, url):
+    return supabase.table("pages").select("*").eq("url", url).execute()
+```
+
+#### `chatbot/chatbot.py`
+```python
+import sys
+from src.config.environment import env_config
+from supabase import create_client
+from .queries import latest_pages, find_page_by_url
+
+supabase = create_client(env_config.supabase_url, env_config.supabase_key)
+print("Connected to Supabase!")
+
+while True:
+    cmd = input("query> ").strip()
+    if cmd in {"exit", "quit"}:
+        break
+    elif cmd == "latest":
+        data = latest_pages(supabase).data
+        print(data)
+    elif cmd.startswith("find "):
+        url = cmd.split(" ", 1)[1]
+        data = find_page_by_url(supabase, url).data
+        print(data)
+    else:
+        print("Commands: latest, find <url>, quit")
+```
+
+### Run and Test
+- Start Supabase locally:
+  ```bash
+  supabase start
+  ```
+- Activate the virtual environment and run the chatbot:
+  ```bash
+  source .venv/bin/activate
+  python -m chatbot.chatbot
+  ```
+- Use `latest` to see recent summaries or `find <url>` to look up a specific page.
+
+### Troubleshooting
+- **Missing Environment Variables**: Ensure `.env` contains `SUPABASE_URL` and `SUPABASE_KEY`.
+- **Supabase Client Not Available**: Install `supabase-py`.
+- **Pages Table Missing**: Run pending migrations (`supabase migration up`).
+- **Exceeded Row Limit**: Use `.limit()` or `.range()` to paginate.
+
+## Next Steps
+- Add natural language parsing via an LLM.
+- Implement pagination and richer commands (e.g., search summaries by keyword).
+
+---
+
+### References
+- [AI Models in Functions](https://supabase.com/docs/guides/functions/ai-models)
+- [Edge Functions Overview](https://supabase.com/docs/guides/functions)
+- [Supabase CLI Reference](https://supabase.com/docs/reference/cli)
