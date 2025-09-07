@@ -1,0 +1,163 @@
+Supa‑crawl (LLM‑playground) – architecture & workflow
+Overview
+
+The supa‑crawl project is a Python web‑crawling pipeline that wraps the Crawl4AIframework with Supabase storage. The AdvancedWebCrawler class configures a headless Chromium browser (via BrowserConfig) and creates a CrawlerRunConfig for each crawl
+GitHub
+. It supports memory‑adaptive and semaphore dispatchers for multi‑URL crawling
+GitHub
+ and integrates an LLM extraction strategy to produce JSON summaries
+GitHub
+. Results (URL, raw markdown, analysis) can be stored in a Supabase pages table using a dedicated handler
+GitHub
+. main.py orchestrates tests of each dispatcher and the LLM pipeline
+GitHub
+. Environment variables specify the Supabase URL/key and OpenAI API key
+GitHub
+. Official Crawl4AI docs explain why LLM extraction is used (for unstructured or semantic data)
+docs.crawl4ai.com
+ and how dispatchers offer adaptive crawling with rate limiting
+docs.crawl4ai.com
+. Supabase CLI docs describe how to initialize and start a local Supabase project with supabase init and supabase start
+supabase.com
+supabase.com
+.
+
+Sources used
+
+Official documentation and code were referenced from:
+
+Crawl4AI docs – LLM extraction strategy, dispatcher behaviour and configuration
+docs.crawl4ai.com
+docs.crawl4ai.com
+docs.crawl4ai.com
+.
+
+Supabase docs – CLI commands (supabase init, start, stop) for local development
+supabase.com
+supabase.com
+supabase.com
+.
+
+Repository code – src/config/environment.py, src/crawlers/async_crawler.py, src/storage/supabase_handler.py, src/models/schemas.py and main.py on the LLM‑playground branch
+ 
+ supa-crawl/
+├─ src/
+│  ├─ config/
+│  │  └─ environment.py           # loads env vars and creates browser/crawler config
+│  ├─ crawlers/
+│  │  └─ async_crawler.py         # defines AdvancedWebCrawler and crawl methods
+│  ├─ models/
+│  │  └─ schemas.py               # Pydantic model for LLM extraction
+│  └─ storage/
+│     └─ supabase_handler.py      # handles Supabase client and insertion/upsert
+├─ main.py                        # demo entry point testing each pipeline stage
+├─ supabase/                      # migrations and config for Supabase project
+├─ docs/                          # documentation (not analysed)
+├─ supabase-cli-commands.md       # local guide for Supabase CLI commands
+├─ tests/                         # pytest scripts
+└─ ... (other packaging files)
+
+| Path                              | Role                                                                 | Key functions/classes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Called by / Calls                                                               | Notes                                                                                                            |
+| --------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `src/config/environment.py`       | Centralised environment and crawler configuration                    | `EnvironmentConfig` reads `SUPABASE_URL`, `SUPABASE_KEY` and `OPENAI_API_KEY` from `.env`; `CrawlerConfig.create_browser_config` builds a `BrowserConfig` with stealth settings; `create_crawler_run_config` returns a `CrawlerRunConfig` with default extraction strategy                                                                                                                                                                                                                                                                                                                                                             | Imported by `async_crawler.py` for global configs                               | Validates env vars and warns if missing.                                                                         |
+| `src/models/schemas.py`           | Pydantic schemas for LLM extraction                                  | `PageSummary` defines `title` and `summary` fields; `CrawlResult` and `Crawl4AIResponse` wrap results                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Used by `async_crawler.py` when configuring `LLMExtractionStrategy`             | Schema ensures LLM output is JSON; can be extended for more fields.                                              |
+| `src/crawlers/async_crawler.py`   | Implements `AdvancedWebCrawler`                                      | Constructor sets `BrowserConfig` and `CrawlerRunConfig` and initialises `SupabaseHandler`. `crawl_with_memory_adaptive_dispatcher` configures a `MemoryAdaptiveDispatcher` with rate limiting and memory thresholds; `crawl_with_semaphore_dispatcher` uses `SemaphoreDispatcher` for simple concurrency. `crawl_with_llm_analysis` checks for an OpenAI key and builds an `LLMExtractionStrategy` with a multi‑line prompt, schema and chunking parameters; it parses JSON results and returns analysis dictionaries. `crawl_and_store_in_supabase` calls the LLM crawl and stores each summary in Supabase via `store_page_summary`. | Called by `main.py` for demonstration; uses `SupabaseHandler` and `PageSummary` | Methods return lists of dicts; adapt dispatcher type based on concurrency or memory needs.                       |
+| `src/storage/supabase_handler.py` | Wraps Supabase client and storage operations                         | `_initialize_client` creates a Supabase client when credentials exist. `_extract_first_paragraph` trims markdown to the first meaningful paragraph for storage. `store_crawl_results` inserts `url` and a truncated `content` into the `pages` table; optionally prepends LLM title/summary. `store_page_summary` performs an upsert of `url`, `title`, `summary` and optional `content` using Supabase‑py’s `upsert()`.                                                                                                                                                                                                               | Called by `async_crawler.py` (`crawl_and_store_in_supabase`) and tests          | Provides two storage patterns: simple insert or structured upsert; warns when client unavailable.                |
+| `main.py`                         | Example script demonstrating the crawler                             | Defines `urls` list of target pages. Inside `main()` it initialises `AdvancedWebCrawler`, then sequentially tests memory‑adaptive crawling, semaphore dispatching, LLM analysis and full pipeline storage                                                                                                                                                                                                                                                                                                                                                                                                                              | Run directly via `python main.py`                                               | Serves as usage example; adjust `urls` or call specific methods for customised workflows.                        |
+| `supabase-cli-commands.md`        | Local CLI reference (not official but summarises Supabase CLI usage) | Contains commands for installation, authentication, migrations, data inspection and troubleshooting                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Stand‑alone; used for developer onboarding                                      | Since the question restricts to official docs, commands should be cross‑checked with official Supabase CLI docs. |
+
+         +-----------------+        (async list of URLs)
+         |    main.py      |-----------------------------+
+         +-----------------+                             |
+                  |                                     |
+                  v                                     v
+         +---------------------+                +---------------------+
+         | AdvancedWebCrawler  |                | AdvancedWebCrawler  |
+         |  crawl_with_memory  |                | crawl_with_semaphore|
+         +---------------------+                +---------------------+
+                  |                                     |
+        returns list of crawl results        returns list of basic results
+                  |                                     |
+                  +------------------------------+------+ 
+                                                 |
+                                                 v
+                                  +-----------------------------+
+                                  | crawl_with_llm_analysis     |
+                                  |  - builds LLMExtractionStrategy   |
+                                  |  - uses PageSummary schema       |
+                                  +-----------------------------+
+                                                 |
+                                            returns analyses
+                                                 |
+                                                 v
+                           +-------------------------------------------+
+                           | crawl_and_store_in_supabase               |
+                           |  - loops through analysed results         |
+                           |  - calls store_page_summary               |
+                           +-------------------------------------------+
+                                                 |
+                                                 v
+                          +---------------------------------------------+
+                          | SupabaseHandler.store_page_summary          |
+                          |  - upserts (url, title, summary, content)   |
+                          +---------------------------------------------+
+Configuration & environment variables
+
+.env – must define SUPABASE_URL, SUPABASE_KEY and OPENAI_API_KEY. EnvironmentConfig loads these and warns if missing
+GitHub
+.
+
+Crawler config – BrowserConfig parameters (headless, browser type, user agent) and CrawlerRunConfig settings (cache mode, word count, extraction strategy) follow official patterns
+GitHub
+.
+
+Dispatchers – choose between MemoryAdaptiveDispatcher (pauses based on RAM usage; includes rate limiter and monitor) and SemaphoreDispatcher (fixed concurrency). Crawl4AI docs explain that dispatchers provide adaptive crawling, rate limiting and real‑time monitoring
+docs.crawl4ai.com
+.
+
+LLM extraction – define a PageSummary schema and specify LLMExtractionStrategy parameters like provider, API token, instruction, chunking and extraction type
+GitHub
+. Crawl4AI docs note that LLM extraction supports various providers and uses chunking to manage token limits
+docs.crawl4ai.com
+docs.crawl4ai.com
+.
+
+Supabase client – initialised via create_client(SUPABASE_URL, SUPABASE_KEY)
+GitHub
+. To run Supabase locally, official CLI commands are: supabase init to set up a project and supabase start to launch Postgres, Auth, Storage and Studio
+supabase.com
+supabase.com
+; supabase stop stops the services
+supabase.com.
+
+Limitations & next actions
+
+Manual URL list – main.py hard‑codes test URLs
+GitHub
+. For production use, implement URL ingestion (e.g., read from a file or database).
+
+Schema rigidity – PageSummary contains only title and summary
+GitHub
+. To extract specific fields (e.g., prices or code snippets), define a new Pydantic schema and update the LLMExtractionStrategy prompt accordingly.
+
+Error handling – exceptions in async_crawler.py are printed but not retried beyond the dispatcher’s rate limiter. Adding retry logic or logging would improve robustness.
+
+Supabase table schema – the pages table is assumed to have url, title, summary and content columns. Migrations aren’t included; the supabase directory likely contains SQL files to create this schema but was not analysed.
+
+Client dependencies – the code expects the supabase Python client to be installed. supabase_handler.py exits if it cannot import create_client
+GitHub
+.
+
+Next steps:
+
+Automate ingestion – integrate a queue or scheduler to supply URLs for crawling, rather than a static list.
+
+Custom extraction – extend schemas.py and modify the LLM prompt to pull domain‑specific data (e.g., product prices, code examples).
+
+Database migrations – ensure migrations in supabase folder align with the fields used in store_page_summary; document how to run them (supabase db push and supabase migration create).
+
+Monitoring & logging – integrate logging libraries and consider using the Crawl4AI monitor API for real‑time dashboards.
+
+Cost optimisation – since LLM extraction can be slow and costly
+docs.crawl4ai.com
+, implement a fallback to schema‑based extraction when structured data is available.
