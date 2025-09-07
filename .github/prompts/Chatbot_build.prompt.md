@@ -8,6 +8,20 @@ We’ll extend the supa-crawl repo (LLM-playground branch) by adding a new chatb
 Create a lightweight terminal chatbot for querying the `pages` table in Supabase. The chatbot will use `supabase-py` for database interactions and optionally leverage Crawl4AI’s LLM extraction strategy for summarizing results. The chatbot will be implemented in a new `chatbot/` directory, reusing existing environment configuration modules.
 
 ## Pre-flight Checklist
+
+- Always double-check with official Supabase documentation:
+    - Python client reference: https://docs.supabase.com/reference/python/select
+    - Local development with CLI: https://supabase.com/docs/guides/local-development/cli/getting-started
+    - Database migrations: https://supabase.com/docs/guides/database/migrations
+    - AI integration: https://supabase.com/docs/guides/ai
+
+- Keep implementation simple:
+    - Use direct table operations with select(), eq(), order(), limit()
+    - Start with local Supabase instance via CLI (supabase init, supabase start)
+    - Create simple migrations for the pages table if it doesn't exist
+    - Focus on basic REPL functionality before adding advanced features
+## Key MCP Usage
+
 Use ALL MCPs each step:
 
     sequentialthinking (plan)
