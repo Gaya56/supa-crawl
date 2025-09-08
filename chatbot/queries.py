@@ -4,8 +4,13 @@ Query helpers for the Supabase chatbot
 Following official Supabase Python client documentation:
 https://supabase.com/docs/reference/python/select
 """
+import logging
 from typing import List, Dict, Any, Optional
 from supabase import Client
+
+# Configure logging for debugging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def latest_pages(supabase: Client, limit: int = 5) -> List[Dict[str, Any]]:
@@ -29,6 +34,7 @@ def latest_pages(supabase: Client, limit: int = 5) -> List[Dict[str, Any]]:
         )
         return response.data
     except Exception as e:
+        logger.error(f"Error fetching latest pages: {str(e)}", exc_info=True)
         print(f"❌ Error fetching latest pages: {str(e)}")
         return []
 
@@ -54,6 +60,7 @@ def find_page_by_url(supabase: Client, url: str) -> Optional[Dict[str, Any]]:
         )
         return response.data[0] if response.data else None
     except Exception as e:
+        logger.error(f"Error finding page by URL: {str(e)}", exc_info=True)
         print(f"❌ Error finding page by URL: {str(e)}")
         return None
 
@@ -81,6 +88,7 @@ def search_pages_by_title(supabase: Client, title_query: str, limit: int = 10) -
         )
         return response.data
     except Exception as e:
+        logger.error(f"Error searching pages by title: {str(e)}", exc_info=True)
         print(f"❌ Error searching pages by title: {str(e)}")
         return []
 
@@ -108,6 +116,7 @@ def search_pages_by_summary(supabase: Client, summary_query: str, limit: int = 1
         )
         return response.data
     except Exception as e:
+        logger.error(f"Error searching pages by summary: {str(e)}", exc_info=True)
         print(f"❌ Error searching pages by summary: {str(e)}")
         return []
 
@@ -130,6 +139,7 @@ def count_total_pages(supabase: Client) -> int:
         )
         return response.count
     except Exception as e:
+        logger.error(f"Error counting pages: {str(e)}", exc_info=True)
         print(f"❌ Error counting pages: {str(e)}")
         return 0
 
@@ -149,16 +159,43 @@ def get_pages_with_summaries(supabase: Client, limit: int = 10) -> List[Dict[str
         response = (
             supabase.table("pages")
             .select("id, url, title, summary")
-            .not_("title", "is", None)
-            .not_("summary", "is", None)
+            .not_.is_("title", "null")
+            .not_.is_("summary", "null")
             .order("id", desc=True)
             .limit(limit)
             .execute()
         )
         return response.data
     except Exception as e:
+        logger.error(f"Error fetching pages with summaries: {str(e)}", exc_info=True)
         print(f"❌ Error fetching pages with summaries: {str(e)}")
         return []
+
+
+def get_page_content(supabase: Client, page_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Get the full content of a specific page by ID.
+    
+    Args:
+        supabase: Supabase client instance
+        page_id: The ID of the page to retrieve
+        
+    Returns:
+        Page dictionary with full content if found, None otherwise
+    """
+    try:
+        response = (
+            supabase.table("pages")
+            .select("*")
+            .eq("id", page_id)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"Error fetching page content: {str(e)}", exc_info=True)
+        print(f"❌ Error fetching page content: {str(e)}")
+        return None
 
 
 def format_page_result(page: Dict[str, Any], include_content: bool = False) -> str:
@@ -189,9 +226,9 @@ def format_page_result(page: Dict[str, Any], include_content: bool = False) -> s
     
     if include_content and page.get('content'):
         content = page.get('content', '')
-        # Truncate content for display
-        if len(content) > 200:
-            content = content[:200] + "..."
+        # For content command, show more content but still truncate very long content
+        if len(content) > 2000:
+            content = content[:2000] + "\n\n... [Content truncated. Use smaller queries or process content in chunks]"
         lines.append(f"📃 Content: {content}")
     
     return "\n".join(lines)

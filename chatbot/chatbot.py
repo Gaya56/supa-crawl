@@ -14,6 +14,7 @@ Commands:
     search summary <query> - Search pages by summary content
     count               - Show total number of pages
     summaries           - Show pages with LLM summaries
+    content <id>        - View full content of a specific page by ID
     help                - Show this help message
     quit/exit           - Exit the chatbot
 """
@@ -38,6 +39,7 @@ from .queries import (
     search_pages_by_summary,
     count_total_pages,
     get_pages_with_summaries,
+    get_page_content,
     format_pages_list,
     format_page_result
 )
@@ -91,6 +93,7 @@ class SupabaseChatbot:
   find <url>          - Find page by URL
   count               - Show total number of pages in database
   summaries           - Show pages with LLM-generated summaries
+  content <id>        - View full content of a specific page by ID
 
 🔍 Search Commands:
   search title <query>    - Search pages by title (case-insensitive)
@@ -106,6 +109,7 @@ class SupabaseChatbot:
   > find https://example.com
   > search title "python tutorial"
   > search summary "machine learning"
+  > content 5
         """
         print(help_text)
     
@@ -178,6 +182,26 @@ class SupabaseChatbot:
         pages = get_pages_with_summaries(self.client)
         print(format_pages_list(pages))
     
+    def handle_content_command(self, parts: list) -> None:
+        """Handle the 'content' command to show full content of a specific page."""
+        if len(parts) < 2:
+            print("❌ Usage: content <page_id>")
+            return
+        
+        try:
+            page_id = int(parts[1])
+        except ValueError:
+            print("❌ Invalid page ID. Must be a number.")
+            return
+        
+        print(f"📝 Fetching content for page ID {page_id}...")
+        page = get_page_content(self.client, page_id)
+        
+        if page:
+            print(format_page_result(page, include_content=True))
+        else:
+            print(f"❌ Page with ID {page_id} not found")
+    
     def process_command(self, command: str) -> bool:
         """
         Process a user command and return False if the user wants to quit.
@@ -213,6 +237,8 @@ class SupabaseChatbot:
             self.handle_count_command()
         elif main_command == "summaries":
             self.handle_summaries_command()
+        elif main_command == "content":
+            self.handle_content_command(parts)
         else:
             print(f"❌ Unknown command: '{main_command}'. Type 'help' for available commands.")
         
