@@ -21,6 +21,8 @@ It will be used to experiment with scraping and storing odds from predictive mar
 - 🧪 Follow the instruction manual: one step at a time, confirm with us before applying, run `python main.py` to validate.
 - 🛑 Always double-check before implementing changes; stop and wait for approval.
 - 📚 **Follow your Format** inside "/workspaces/supa-crawl/.github/instructions/references-rag.instructions.md" every step of the way
+- 📝 After each step, provide a brief summary of changes made, links to official docs used, and the next micro-step.
+- 🛠️ We will use the Supabase CLI to create and manage the testing table from the `/workspaces/supa-crawl/supabase` directory. The agent will follow the official Supabase CLI documentation step by step to build the table schema, disable RLS, and confirm that all required columns are properly implemented. Each command will be executed within the designated Supabase project directory to ensure proper configuration and connection.
 
 ## Columns for `testing` Table
 
