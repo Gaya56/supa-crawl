@@ -1,5 +1,5 @@
 ---
-applyTo: '**'
+applyTo: '*/workspaces/supa-crawl*'
 ---
 ## Supa-crawl (supabase-docs): Architecture and Workflow
 
