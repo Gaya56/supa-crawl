@@ -20,6 +20,7 @@ It will be used to experiment with scraping and storing odds from predictive mar
 - 🔒 **Disable RLS** on the `testing` table so reads/writes work.
 - 🧪 Follow the instruction manual: one step at a time, confirm with us before applying, run `python main.py` to validate.
 - 🛑 Always double-check before implementing changes; stop and wait for approval.
+- 📚 **Follow your Format** inside "/workspaces/supa-crawl/.github/instructions/references-rag.instructions.md" every step of the way
 
 ## Columns for `testing` Table
 
