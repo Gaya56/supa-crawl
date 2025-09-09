@@ -119,9 +119,9 @@ class SupabaseHandler:
                     analysis_header = f"TITLE: {title}\nSUMMARY: {summary}\n\n"
                     data['content'] = analysis_header + data['content']
                 
-                # Insert into pages table using official Supabase pattern
+                # Insert into Supabase-Docs table using official Supabase pattern
                 # Source: https://supabase.com/docs/reference/python/initializing
-                response = self.client.table('pages').insert(data).execute()
+                response = self.client.table('Supabase-Docs').insert(data).execute()
                 
                 if response.data:
                     stored_count += 1
@@ -170,7 +170,7 @@ class SupabaseHandler:
             
             # Official Supabase upsert pattern
             # Source: https://supabase.com/docs/reference/python/upsert
-            response = self.client.table("pages").upsert(data).execute()
+            response = self.client.table("Supabase-Docs").upsert(data).execute()
             
             if response.data:
                 print(f"✓ Stored page summary: {url}")
@@ -185,14 +185,14 @@ class SupabaseHandler:
     
     def check_connection(self) -> bool:
         """
-        Test Supabase connection by querying the pages table
+        Test Supabase connection by querying the Supabase-Docs table
         """
         if not self.is_available:
             return False
             
         try:
             # Test connection with a simple query
-            response = self.client.table('pages').select('id').limit(1).execute()
+            response = self.client.table('Supabase-Docs').select('id').limit(1).execute()
             print("✓ Supabase connection verified")
             return True
         except Exception as e:

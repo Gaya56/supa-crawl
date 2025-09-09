@@ -168,9 +168,9 @@ class AdvancedWebCrawler:
             extraction_type="schema",
             instruction="""Extract the main title and create a concise summary from this web page content. 
             For the title: Use the main page heading, document title, or prominent header text.
-            For the summary: Write a 3-4 sentence description of what this page is about and its main purpose.
+            For the summary: Write a 4-5 sentence description of what this page is about and its main purpose.
             If you cannot find a clear title, extract the most prominent heading or use the page's main topic.
-            If you cannot determine the page content, describe what you can see.""",
+            If you cannot determine the page content, describe what you can see. And how it works""",
             chunk_token_threshold=1000,
             apply_chunking=True,
             input_format="markdown",
