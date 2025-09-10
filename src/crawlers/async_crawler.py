@@ -431,12 +431,19 @@ class AdvancedWebCrawler:
                 # Store each prediction market
                 for i, market_data in enumerate(markets_to_store):
                     try:
-                        # Remove any extra fields that aren't in our schema
+                        # Include all fields from enhanced PredictionMarketBet schema
                         clean_data = {
+                            # Original required fields
                             'website_name': market_data.get('website_name', ''),
                             'bet_title': market_data.get('bet_title', ''),
                             'odds': market_data.get('odds', ''),
-                            'summary': market_data.get('summary', '')
+                            'summary': market_data.get('summary', ''),
+                            # Enhanced descriptive fields from migration
+                            'market_category': market_data.get('market_category'),
+                            'betting_options': market_data.get('betting_options'),
+                            'probability_percentage': market_data.get('probability_percentage'),
+                            'volume_info': market_data.get('volume_info'),
+                            'closing_date': market_data.get('closing_date')
                         }
                         
                         prediction_bet = PredictionMarketBet(**clean_data)
