@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-Main Entry Point for Live Prediction Market Crawler (2025)
+Main Entry Point for Dashboard-Aggregated Prediction Market Crawler (2025)
 Following official documentation from:
 - Crawl4AI: https://docs.crawl4ai.com/
 - Supabase: https://supabase.com/docs
 
 Features:
-- LIVE prediction market data extraction from current active 2025 markets
-- Sources: Polymarket, Manifold Markets, ElectionBettingOdds, Kalshi, PredictIt
+- DASHBOARD AGGREGATION: Multi-source prediction market data from specialized aggregators
+- Tier 1 Sources: PolymarketAnalytics (60,000+ markets), ElectionBettingOdds (political aggregator)
+- Tier 2 Sources: OddsJam (25+ sportsbooks), OddsChecker (80+ bookmakers), Betfair Exchange
+- COMPREHENSIVE COVERAGE: Politics, sports, economics, tech, AI across multiple platforms
 - LLM-powered structured data extraction using PredictionMarketBet schema  
 - Supabase storage with Testing table schema (source_url, website_name, bet_title, odds, summary)
-- Current event tracking (politics, sports, economics, tech, AI)
+- Cross-platform comparison and arbitrage detection capabilities
 - Stealth configuration to avoid bot detection
 - Memory adaptive dispatcher for optimal resource management
 - Real-time monitoring and rate limiting
@@ -40,15 +42,29 @@ async def main():
     # Initialize the advanced crawler
     crawler = AdvancedWebCrawler()
     
-    # Current Active Prediction Market URLs for 2025 - Live Data
-    # Based on research: major prediction market sites with active current markets
-    urls = [
-        "https://polymarket.com/",                   # World's largest prediction market - live 2025 data
-        "https://manifold.markets/",                 # Social prediction game - active 2025 markets 
-        "https://electionbettingodds.com/",         # Live betting odds aggregator - current events
-        "https://kalshi.com/",                      # Regulated prediction market - live trading
-        "https://www.predictit.org/",               # Academic prediction market - current markets
+    # Tier 1: Specialized Prediction Market Dashboards (PRIORITY)
+    tier1_dashboard_urls = [
+        "https://polymarketanalytics.com/",         # Aggregates 60,000+ markets from Polymarket + Kalshi
+        "https://electionbettingodds.com/",         # Multi-source political odds aggregator
+        "https://polymarketanalytics.com/polymarket-vs-kalshi",  # Direct platform comparison
     ]
+    
+    # Tier 2: Professional Odds Aggregators  
+    tier2_aggregator_urls = [
+        "https://oddsjam.com/",                     # Gold standard betting analytics (25+ sources)
+        "https://www.oddschecker.com/us/",         # Leading odds comparison since 1999
+        "https://betting.betfair.com/betfair-predicts/",  # Exchange-based predictions
+    ]
+    
+    # Original Individual Platform URLs (for comparison)
+    individual_platform_urls = [
+        "https://polymarket.com/",                  # World's largest prediction market
+        "https://manifold.markets/",               # Social prediction game 
+        "https://kalshi.com/",                     # Regulated prediction market
+    ]
+    
+    # Combined URL list - Start with dashboard aggregators for maximum data
+    urls = tier1_dashboard_urls + tier2_aggregator_urls[:2]  # Focus on best aggregators first
     
     print(f"🎯 Target URLs ({len(urls)}):")
     for i, url in enumerate(urls, 1):
