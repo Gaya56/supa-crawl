@@ -241,14 +241,28 @@ class AdvancedWebCrawler:
             ),
             schema=PredictionMarketBet.model_json_schema(),   # Use prediction market schema
             extraction_type="schema",
-            instruction="""Extract prediction market data from this page. Look for:
+            instruction="""Extract comprehensive prediction market data from this page. Look for:
+            
+            REQUIRED FIELDS:
             - website_name: The name of the prediction market site (e.g., Polymarket, Kalshi, PredictIt, Manifold Markets)
             - bet_title: The title or name of the specific prediction market or betting event
-            - odds: Current odds, probability percentage, or price for this market (e.g., "62%", "$0.38", "3:1")
+            - odds: Current odds, probability percentage, or price for this market (e.g., "62%", "$0.38", "3:1", "Yes: $0.65")
             - summary: Brief description of what this market is predicting or betting on
             
-            Focus on individual prediction markets or betting events. If multiple markets are shown, extract the most prominent one.
-            Be precise with the odds format as displayed on the site.""",
+            ENHANCED DESCRIPTIVE FIELDS (extract if available):
+            - market_category: Category like "Politics", "Sports", "Economics", "Technology", "Entertainment", "Crypto"
+            - betting_options: Available betting choices (e.g., "Yes/No", "Up/Down", "Trump/Harris", "Team A vs Team B")
+            - probability_percentage: Implied probability as percentage (0-100) if you can calculate from odds
+            - volume_info: Trading volume, liquidity, market size, or participation metrics (e.g., "$1.2M volume", "500 traders")
+            - closing_date: When the market closes, resolves, or event occurs (as readable text like "Nov 5, 2024" or "End of 2024")
+            
+            EXTRACTION STRATEGY:
+            - Extract multiple markets if available on the page - don't limit to just one
+            - Be precise with odds format as displayed on the site
+            - For categories, infer from context if not explicitly stated
+            - For probabilities, convert odds to percentages when possible (e.g., $0.65 = 65%)
+            - Look for volume/liquidity indicators like dollar amounts, trader counts, or market size
+            - Extract dates from market titles or description text""",
             chunk_token_threshold=1000,
             apply_chunking=True,
             input_format="markdown",

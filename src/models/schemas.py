@@ -1,19 +1,47 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class PredictionMarketBet(BaseModel):
-    """Schema for prediction market data extraction to match Testing table schema.
+    """Enhanced schema for prediction market data extraction to match improved Testing table.
     Source: https://docs.crawl4ai.com/extraction/llm-strategies/
-    Matches Testing table columns: source_url, website_name, bet_title, odds, summary
+    
+    Matches all Testing table columns including new descriptive fields:
+    - Basic fields: website_name, bet_title, odds, summary
+    - Enhanced fields: market_category, betting_options, probability_percentage, volume_info, closing_date
     """
 
     website_name: str = Field(
-        description="Name of the prediction market site (e.g., Polymarket, Kalshi)"
+        description="Name of the prediction market site (e.g., Polymarket, Kalshi, OddsChecker)"
     )
-    bet_title: str = Field(description="Title of the prediction market or bet")
-    odds: str = Field(description="Current odds or probability for this market")
+    bet_title: str = Field(
+        description="Clear title or question of the prediction market"
+    )
+    odds: str = Field(
+        description="Raw odds/prices as displayed (e.g., 'Yes: 65% | No: 35%', '$1.20 / $0.80', '2.5 to 1')"
+    )
     summary: str = Field(
         description="Brief description of what this market is predicting"
+    )
+    market_category: Optional[str] = Field(
+        default=None,
+        description="Category like Politics, Sports, Economics, Tech, Entertainment, etc."
+    )
+    betting_options: Optional[str] = Field(
+        default=None,
+        description="Available betting choices (e.g., 'Yes/No', 'Up/Down', 'Team A vs Team B', candidate names)"
+    )
+    probability_percentage: Optional[float] = Field(
+        default=None,
+        description="Implied probability as percentage (0-100) based on odds"
+    )
+    volume_info: Optional[str] = Field(
+        default=None,
+        description="Trading volume, liquidity, market size, or participation metrics"
+    )
+    closing_date: Optional[str] = Field(
+        default=None,
+        description="When the market closes, resolves, or event occurs (as readable text)"
     )
 
 
