@@ -19,7 +19,7 @@ from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher, SemaphoreDispatc
 from crawl4ai import CrawlerMonitor, RateLimiter
 
 from ..config.environment import env_config, crawler_config
-from ..models.schemas import PageSummary
+from ..models.schemas import PageSummary, PredictionMarketBet
 from ..storage.supabase_handler import SupabaseHandler
 
 
@@ -219,6 +219,88 @@ class AdvancedWebCrawler:
             
             return analyzed_results
     
+    async def crawl_prediction_markets_with_llm(self, urls: List[str]) -> List[Dict[str, Any]]:
+        """
+        Crawl prediction market URLs with LLM analysis for structured prediction market data extraction.
+        Source: https://docs.crawl4ai.com/extraction/llm-strategies/
+        Uses PredictionMarketBet schema to match Testing table structure.
+        """
+        print(f"🎲 Starting prediction market LLM crawl for {len(urls)} URLs")
+        
+        # Check for OpenAI API key
+        if not env_config.has_openai_config:
+            print("⚠ OpenAI API key not found, cannot extract prediction market data")
+            return []
+        
+        # Configure LLM extraction strategy for prediction markets
+        # Source: https://docs.crawl4ai.com/extraction/llm-strategies/
+        llm_strategy = LLMExtractionStrategy(
+            llm_config=LLMConfig(
+                provider="openai/gpt-4o-mini",  # Official docs pattern
+                api_token=env_config.openai_api_key
+            ),
+            schema=PredictionMarketBet.model_json_schema(),   # Use prediction market schema
+            extraction_type="schema",
+            instruction="""Extract prediction market data from this page. Look for:
+            - website_name: The name of the prediction market site (e.g., Polymarket, Kalshi, PredictIt, Manifold Markets)
+            - bet_title: The title or name of the specific prediction market or betting event
+            - odds: Current odds, probability percentage, or price for this market (e.g., "62%", "$0.38", "3:1")
+            - summary: Brief description of what this market is predicting or betting on
+            
+            Focus on individual prediction markets or betting events. If multiple markets are shown, extract the most prominent one.
+            Be precise with the odds format as displayed on the site.""",
+            chunk_token_threshold=1000,
+            apply_chunking=True,
+            input_format="markdown",
+            extra_args={"temperature": 0.2}  # Make output deterministic
+        )
+        
+        # Update run config with prediction market LLM strategy
+        crawler_config_prediction = CrawlerRunConfig(
+            cache_mode=CacheMode.BYPASS,
+            extraction_strategy=llm_strategy,
+            word_count_threshold=1   # don't filter out short pages
+        )
+        
+        async with AsyncWebCrawler(config=self.browser_config) as crawler:
+            results = await crawler.arun_many(
+                urls=urls,
+                config=crawler_config_prediction
+            )
+            
+            analyzed_results = []
+            for result in results:
+                if result.success and result.extracted_content:
+                    try:
+                        # DEBUG: Show raw LLM response
+                        print(f"🔍 Raw LLM Response for {result.url}:")
+                        print(f"   Length: {len(result.extracted_content)} chars")
+                        print(f"   Content: {result.extracted_content[:500]}...")
+                        
+                        # Following official pattern: data = json.loads(result.extracted_content)
+                        data = json.loads(result.extracted_content)
+                        analyzed_results.append({
+                            'url': result.url,
+                            'raw_markdown': result.markdown,
+                            'prediction_data': data,  # data will match PredictionMarketBet schema
+                            'status_code': result.status_code,
+                            'crawl_time': datetime.now().isoformat()
+                        })
+                        print(f"🎲 Prediction market data extracted for: {result.url}")
+                    except json.JSONDecodeError as e:
+                        print(f"❌ Failed to parse prediction market LLM output for {result.url}: {str(e)}")
+                        # Fallback to basic result
+                        analyzed_results.append({
+                            'url': result.url,
+                            'raw_markdown': result.markdown,
+                            'prediction_data': None,
+                            'status_code': result.status_code
+                        })
+                else:
+                    print(f"✗ Failed to extract prediction market data from {result.url}: {result.error_message if result else 'Unknown error'}")
+            
+            return analyzed_results
+    
     async def crawl_and_store_in_supabase(self, urls: List[str]) -> bool:
         """
         Crawl URLs and store results in Supabase database with LLM analysis.
@@ -284,4 +366,88 @@ class AdvancedWebCrawler:
                 print(f"❌ Error storing {result.get('url', 'unknown')}: {str(e)}")
         
         print(f"🎯 Storage complete: {stored_count}/{len(results)} results stored with LLM analysis")
+        return stored_count > 0
+    
+    async def crawl_and_store_prediction_markets(self, urls: List[str]) -> bool:
+        """
+        Crawl prediction market URLs and store results in Supabase with prediction market schema.
+        Uses store_prediction_market_data() method to match Testing table structure.
+        """
+        if not self.storage_handler.is_available:
+            print("❌ Supabase not configured. Check environment variables.")
+            return False
+        
+        print(f"🎲 Starting prediction market crawl and store workflow for {len(urls)} URLs")
+        
+        # Crawl with prediction market LLM analysis
+        results = await self.crawl_prediction_markets_with_llm(urls)
+        
+        if not results:
+            print("❌ No results from prediction market LLM analysis")
+            return False
+        
+        # Store results using the new prediction market schema
+        stored_count = 0
+        for result in results:
+            try:
+                url = result.get('url')
+                if not url:
+                    print("⚠ Skipping result with no URL")
+                    continue
+                    
+                prediction_data_raw = result.get('prediction_data')
+                
+                # DEBUG: Print what the LLM actually returned
+                print(f"🔍 DEBUG - Raw LLM output for {url}:")
+                print(f"   Type: {type(prediction_data_raw)}")
+                print(f"   Content: {prediction_data_raw}")
+                
+                # Handle both single object and array responses from LLM
+                markets_to_store = []
+                if prediction_data_raw:
+                    if isinstance(prediction_data_raw, list):
+                        # LLM returned array of markets - store all of them
+                        markets_to_store = prediction_data_raw
+                        print(f"📊 LLM returned {len(markets_to_store)} prediction markets")
+                    elif isinstance(prediction_data_raw, dict):
+                        # LLM returned single market
+                        markets_to_store = [prediction_data_raw]
+                        print(f"📊 LLM returned 1 prediction market")
+                
+                # Store each prediction market
+                for i, market_data in enumerate(markets_to_store):
+                    try:
+                        # Remove any extra fields that aren't in our schema
+                        clean_data = {
+                            'website_name': market_data.get('website_name', ''),
+                            'bet_title': market_data.get('bet_title', ''),
+                            'odds': market_data.get('odds', ''),
+                            'summary': market_data.get('summary', '')
+                        }
+                        
+                        prediction_bet = PredictionMarketBet(**clean_data)
+                        
+                        # Store using prediction market schema
+                        response = self.storage_handler.store_prediction_market_data(
+                            source_url=url,
+                            prediction_data=prediction_bet
+                        )
+                        
+                        if response:
+                            stored_count += 1
+                            print(f"✓ Stored prediction market {i+1}: {prediction_bet.bet_title} from {prediction_bet.website_name}")
+                        else:
+                            print(f"❌ Failed to store prediction market {i+1} from: {url}")
+                            
+                    except Exception as validation_error:
+                        print(f"❌ Failed to validate prediction market {i+1} from {url}: {str(validation_error)}")
+                        print(f"   Market data: {market_data}")
+                        
+                if not markets_to_store:
+                    print(f"⚠ No prediction market data extracted from: {url}")
+                    
+            except Exception as e:
+                print(f"❌ Error storing prediction market from {result.get('url', 'unknown')}: {str(e)}")
+        
+        print(f"🎯 Prediction market storage complete: {stored_count}/{len(results)} results stored")
         return stored_count > 0

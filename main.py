@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-Main Entry Point for AsyncWebCrawler Advanced Implementation
+Main Entry Point for Live Prediction Market Crawler (2025)
 Following official documentation from:
 - Crawl4AI: https://docs.crawl4ai.com/
 - Supabase: https://supabase.com/docs
 
 Features:
+- LIVE prediction market data extraction from current active 2025 markets
+- Sources: Polymarket, Manifold Markets, ElectionBettingOdds, Kalshi, PredictIt
+- LLM-powered structured data extraction using PredictionMarketBet schema  
+- Supabase storage with Testing table schema (source_url, website_name, bet_title, odds, summary)
+- Current event tracking (politics, sports, economics, tech, AI)
 - Stealth configuration to avoid bot detection
 - Memory adaptive dispatcher for optimal resource management
-- LLM integration for content analysis
-- Supabase storage for persistence
 - Real-time monitoring and rate limiting
 """
 import asyncio
@@ -26,8 +29,9 @@ from src.config.environment import env_config
 async def main():
     """Complete example demonstrating AsyncWebCrawler with stealth and Supabase integration"""
     
-    print("🌐 AsyncWebCrawler Advanced Implementation")
+    print("� Prediction Market Crawler Implementation")
     print("=" * 60)
+    print("Extracting structured prediction market data with LLM analysis")
     print("Following official documentation:")
     print("- Crawl4AI: https://docs.crawl4ai.com/")
     print("- Supabase: https://supabase.com/docs")
@@ -36,11 +40,14 @@ async def main():
     # Initialize the advanced crawler
     crawler = AdvancedWebCrawler()
     
-    # Example URLs to crawl - using reliable test URLs
+    # Current Active Prediction Market URLs for 2025 - Live Data
+    # Based on research: major prediction market sites with active current markets
     urls = [
-        "https://docs.crawl4ai.com/api/parameters/",
-        "https://docs.crawl4ai.com/",
-        "https://example.com"
+        "https://polymarket.com/",                   # World's largest prediction market - live 2025 data
+        "https://manifold.markets/",                 # Social prediction game - active 2025 markets 
+        "https://electionbettingodds.com/",         # Live betting odds aggregator - current events
+        "https://kalshi.com/",                      # Regulated prediction market - live trading
+        "https://www.predictit.org/",               # Academic prediction market - current markets
     ]
     
     print(f"🎯 Target URLs ({len(urls)}):")
@@ -64,10 +71,15 @@ async def main():
         llm_results = await crawler.crawl_with_llm_analysis(urls[:2])
         print(f"   Results: {len(llm_results)} analyzed crawls\n")
         
-        # Option 4: Full pipeline with Supabase storage
-        print("4️⃣ Testing Full Pipeline with Supabase...")
-        success = await crawler.crawl_and_store_in_supabase(urls[:2])  # Test with fewer URLs first
+        # Option 4: Full pipeline with Supabase storage (legacy)
+        print("4️⃣ Testing Full Pipeline with Supabase (legacy schema)...")
+        success = await crawler.crawl_and_store_in_supabase(["https://example.com"])  # Test with simple URL
         print(f"   Storage success: {success}\n")
+        
+        # Option 5: NEW - Prediction Market Pipeline
+        print("5️⃣ Testing Prediction Market Pipeline...")
+        pred_success = await crawler.crawl_and_store_prediction_markets(urls[:2])  # Test with 2 prediction market URLs
+        print(f"   Prediction market storage success: {pred_success}\n")
         
         print("🎉 All tests completed successfully!")
         
