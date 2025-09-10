@@ -38,10 +38,10 @@ All environment variables are now properly configured:
 
 ## 📋 REMAINING STEPS
 
-### ⏳ Step 5: Store Service Role Key in Vault
-- [ ] Create migration: `setup_vault_secrets`
-- [ ] Get project URL and service role key from Supabase dashboard
-- [ ] Store secrets in vault for cron job access
+### ✅ Step 5: Store Service Role Key in Vault (COMPLETED)
+- [x] Create migration: `setup_vault_secrets` (20250910212252_setup_vault_secrets.sql)
+- [x] Get project URL and service role key from Supabase dashboard
+- [x] Store secrets in vault for cron job access (daily_report_url, service_role_key)
 
 ### ⏳ Step 6: Create pg_cron Schedule
 - [ ] Create migration: `schedule_daily_report`
