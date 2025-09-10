@@ -51,19 +51,15 @@ serve(async (req: Request) => {
     console.log(`Querying data since: ${yesterday.toISOString()}`)
     
     const { data: markets, error } = await supabase
-      .from('Testing')
+      .from('Crawl4AI-Docs')
       .select(`
-        website_name,
-        bet_title,
-        odds,
+        id,
+        url,
+        title,
         summary,
-        market_category,
-        betting_options,
-        probability_percentage,
-        volume_info
+        content
       `)
-      .gte('timestamp', yesterday.toISOString())
-      .order('volume_info', { ascending: false, nullsFirst: false })
+      .limit(20)
 
     if (error) {
       console.error('Database query error:', error)
@@ -79,27 +75,25 @@ serve(async (req: Request) => {
       )
     }
 
-    // Group markets by category
-    const categorizedMarkets: MarketsByCategory = markets.reduce((acc, market) => {
-      const category = market.market_category || 'Uncategorized'
+    // Group docs by type (simplified categorization)
+    const categorizedMarkets: MarketsByCategory = markets.reduce((acc, doc) => {
+      const category = 'Documentation'
       if (!acc[category]) acc[category] = []
       acc[category].push({
-        site: market.website_name,
-        title: market.bet_title,
-        odds: market.odds,
-        probability: market.probability_percentage,
-        volume: market.volume_info
+        site: 'Crawl4AI-Docs',
+        title: doc.title || 'No title',
+        odds: doc.url || 'No URL',
+        probability: null,
+        volume: doc.summary ? doc.summary.substring(0, 100) + '...' : 'No summary'
       })
       return acc
     }, {} as MarketsByCategory)
 
-    // Get unique websites
-    const websites = [...new Set(markets.map((m: PredictionMarket) => m.website_name))]
+    // Get unique sources
+    const websites = ['Crawl4AI-Docs']
     
-    // Prepare market summary
-    const marketSummary = Object.entries(categorizedMarkets)
-      .map(([category, items]) => `${category}: ${items.length} markets`)
-      .join(', ')
+    // Prepare docs summary
+    const marketSummary = `Documentation: ${markets.length} documents`
 
     console.log('Market summary:', marketSummary)
 
@@ -123,20 +117,20 @@ serve(async (req: Request) => {
         messages: [
           {
             role: 'system',
-            content: `You are a prediction market analyst. Analyze betting trends and provide insights in HTML format with these sections:
-            1. Executive Summary (key findings in 3-4 bullets)
-            2. Market Trends by Category (highlight high-volume and shifting markets)
-            3. Notable Movements (significant probability changes or new markets)
-            4. Investment Opportunities (markets with potential value)
+            content: `You are a technical documentation analyst. Analyze Crawl4AI documentation and provide insights in HTML format with these sections:
+            1. Executive Summary (key documentation topics in 3-4 bullets)
+            2. Content Overview (highlight main documentation areas)
+            3. Key Resources (most important documents and guides)
+            4. Documentation Quality (coverage and usefulness assessment)
             Format as clean HTML with <h2> headers and <ul>/<li> for lists.`
           },
           {
             role: 'user',
-            content: `Analyze ${markets.length} prediction markets from the last 24 hours across ${websites.length} platforms:
+            content: `Analyze ${markets.length} Crawl4AI documentation entries:
 
-Categories: ${marketSummary}
+Summary: ${marketSummary}
 
-Full data:
+Documentation data:
 ${JSON.stringify(categorizedMarkets, null, 2)}`
           }
         ],
@@ -214,7 +208,7 @@ ${JSON.stringify(categorizedMarkets, null, 2)}`
   </style>
 </head>
 <body>
-  <h1>📊 Daily Prediction Market Report</h1>
+  <h1>� Daily Crawl4AI Documentation Report</h1>
   
   <div class="header-info">
     <strong>Report Date:</strong> ${new Date().toLocaleDateString('en-US', { 
@@ -223,14 +217,14 @@ ${JSON.stringify(categorizedMarkets, null, 2)}`
       month: 'long', 
       day: 'numeric' 
     })}<br>
-    <strong>Analysis Period:</strong> Last 24 hours<br>
-    <strong>Data Sources:</strong> ${websites.join(', ')}
+    <strong>Analysis Scope:</strong> Crawl4AI Documentation<br>
+    <strong>Data Source:</strong> ${websites.join(', ')}
   </div>
   
   <div class="stats">
     <div class="stat-box">
       <div class="number">${markets.length}</div>
-      <div class="label">Total Markets</div>
+      <div class="label">Total Documents</div>
     </div>
     <div class="stat-box">
       <div class="number">${Object.keys(categorizedMarkets).length}</div>
@@ -238,7 +232,7 @@ ${JSON.stringify(categorizedMarkets, null, 2)}`
     </div>
     <div class="stat-box">
       <div class="number">${websites.length}</div>
-      <div class="label">Platforms</div>
+      <div class="label">Sources</div>
     </div>
   </div>
   
