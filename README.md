@@ -1,17 +1,25 @@
-# Supabase CLI
+# Supa-Crawl: AI Prediction Market Crawler
 
-[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
-](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+🎯 **Advanced web crawler for extracting live prediction market data using Crawl4AI and Supabase.**
 
-[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
+## ✅ Current Status - September 10, 2025
 
-This repository contains all the functionality for Supabase CLI.
+Successfully crawling **268+ live prediction markets** from Polymarket with real-time data:
 
-- [x] Running Supabase locally
-- [x] Managing database migrations
-- [x] Creating and deploying Supabase Functions
-- [x] Generating types directly from your database schema
-- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
+### Active Markets Tracked
+
+- 🪙 **Crypto**: Bitcoin, Ethereum, Solana, XRP price predictions & hourly up/down bets
+- ⚾ **Sports**: MLB games, UFC fights, Asia Cup matches ($55M+ volume on World Series alone)
+- 🏛️ **Politics**: Middle East conflicts, military actions, government predictions  
+- 🎬 **Entertainment**: Movie box office, celebrity challenges, social media metrics
+- 🌤️ **Weather**: Temperature predictions for major cities
+
+### Technical Stack
+
+- **Crawl4AI** with LLM extraction (GPT-4o-mini)
+- **Supabase** database with enhanced schema (12 columns)
+- **Memory Adaptive Dispatcher** for optimal crawling
+- **Real-time odds & probability conversion**
 
 ## Getting started
 
