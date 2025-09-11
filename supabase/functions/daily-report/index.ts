@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
+import OpenAI from 'https://deno.land/x/openai@v4.24.0/mod.ts'
 
 serve(async (req: Request) => {
   try {
@@ -18,16 +19,91 @@ serve(async (req: Request) => {
     // Get detailed table analysis
     const { data: tableStats, error: statsError } = await supabase.rpc('analyze_crawl4ai_docs')
 
-    // Fallback query if RPC doesn't exist
-    const { data: docs, error: docsError } = await supabase
-      .from('Crawl4AI-Docs')
-      .select('*')
+    // Fetch from both tables
+    const [crawlResult, supabaseResult] = await Promise.all([
+      supabase.from('Crawl4AI-Docs').select('*'),
+      supabase.from('Supabase-Docs').select('*')
+    ])
 
-    if (docsError) {
-      throw new Error(`Failed to fetch data: ${docsError.message}`)
+    if (crawlResult.error || supabaseResult.error) {
+      throw new Error(`Failed to fetch data: ${crawlResult.error?.message || supabaseResult.error?.message}`)
     }
 
-    console.log(`Found ${docs?.length || 0} documents`)
+    // Combine results from both tables
+    const crawlDocs = crawlResult.data || []
+    const supabaseDocs = supabaseResult.data || []
+    let docs = [...crawlDocs.map(d => ({...d, source: 'Crawl4AI'})), ...supabaseDocs.map(d => ({...d, source: 'Supabase'}))]
+    
+    console.log(`Found ${crawlDocs.length} Crawl4AI docs and ${supabaseDocs.length} Supabase docs (${docs.length} total)`)
+
+    // Add OpenAI summarization for documents without summaries
+    const openaiKey = Deno.env.get('OPENAI_API_KEY')
+    if (openaiKey && docs && docs.length > 0) {
+      console.log('Checking for documents needing summaries...')
+      
+      const docsNeedingSummary = docs.filter(doc => doc.content && !doc.summary)
+      console.log(`Found ${docsNeedingSummary.length} documents without summaries`)
+      
+      if (docsNeedingSummary.length > 0) {
+        const openai = new OpenAI({ apiKey: openaiKey })
+        
+        // Process first 5 docs to avoid rate limits
+        const docsToProcess = docsNeedingSummary.slice(0, 5)
+        
+        for (const doc of docsToProcess) {
+          try {
+            console.log(`Generating summary for doc ${doc.id}...`)
+            
+            const chatCompletion = await openai.chat.completions.create({
+              messages: [{
+                role: 'system',
+                content: 'Generate a single concise sentence summary of the provided documentation content.'
+              }, {
+                role: 'user',
+                content: doc.content.substring(0, 2000) // Limit content to avoid token limits
+              }],
+              model: 'gpt-3.5-turbo',
+              max_tokens: 100,
+              temperature: 0.3,
+              stream: false
+            })
+            
+            const summary = chatCompletion.choices[0].message.content
+            
+            // Update document with generated summary
+            const tableName = doc.source === 'Crawl4AI' ? 'Crawl4AI-Docs' : 'Supabase-Docs'
+            const { error: updateError } = await supabase
+              .from(tableName)
+              .update({ summary })
+              .eq('id', doc.id)
+            
+            if (updateError) {
+              console.error(`Failed to update doc ${doc.id}:`, updateError)
+            } else {
+              console.log(`Successfully updated doc ${doc.id} with summary`)
+            }
+            
+            // Rate limit delay (1 second between requests)
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            
+          } catch (err) {
+            console.error(`Error generating summary for doc ${doc.id}:`, err)
+          }
+        }
+        
+        // Re-fetch both tables to get updated summaries
+        const [updatedCrawl, updatedSupabase] = await Promise.all([
+          supabase.from('Crawl4AI-Docs').select('*'),
+          supabase.from('Supabase-Docs').select('*')
+        ])
+        
+        if (updatedCrawl.data || updatedSupabase.data) {
+          const crawlDocs = updatedCrawl.data || []
+          const supabaseDocs = updatedSupabase.data || []
+          docs = [...crawlDocs.map(d => ({...d, source: 'Crawl4AI'})), ...supabaseDocs.map(d => ({...d, source: 'Supabase'}))]
+        }
+      }
+    }
 
     // Enhanced data analysis
     const totalDocs = docs?.length || 0
@@ -77,7 +153,7 @@ SYSTEM STATUS:
 - Database Connection: Active
 - Data Freshness: Current  
 - Next Report: Tomorrow at 9:00 AM UTC
-- Report Source: Crawl4AI-Docs table (${totalDocs} records)
+- Report Source: Combined analysis of Crawl4AI-Docs (${crawlDocs.length}) and Supabase-Docs (${supabaseDocs.length}) tables
     `
 
     // Save to database
@@ -87,7 +163,7 @@ SYSTEM STATUS:
         report_date: reportDate,
         title: reportTitle,
         content: simpleContent,
-        summary: `Comprehensive analysis of ${totalDocs} Crawl4AI documentation records`,
+        summary: `Combined analysis of ${totalDocs} documentation records from both Crawl4AI and Supabase tables`,
         documents_analyzed: totalDocs,
         categories_found: 3, // Overview, Quality, Status
         ai_insights: `Data integrity: ${completionRate}% complete, Avg content: ${avgContentLength} chars`,
